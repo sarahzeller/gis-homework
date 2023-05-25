@@ -1,0 +1,78 @@
+---
+author: Sarah Zeller
+title: Homework assignment 1
+format:
+  pdf:
+    toc: true
+
+render:
+  messages: false
+    
+---
+
+```{r}
+#| label: load-packages
+
+library(archive)
+library(sf)
+library(tidyverse)
+library(rnaturalearth)
+library(rnaturalearthhires)
+library(osmdata)
+```
+
+
+```{r}
+#| label: check-for-output
+
+library(here)
+if (!"output" %in% (here() |> list.files())) {
+  here("output") |> dir.create()
+}
+
+
+```
+
+## Road data
+Road data are from GRIP: global roads database.
+
+```{r}
+#| label: download-data-roads
+if (!"roads.zip" %in% (here("output") |> list.files())) {
+  # reset timeout for download to longer time
+  old_timeout <- getOption('timeout')
+  options(timeout = 200)
+  # download
+  download.file("https://dataportaal.pbl.nl/downloads/GRIP4/GRIP4_Region3_vector_shp.zip",
+                here("output/roads.zip"))
+  # set back to before
+  options(timeout = old_timeout)
+  # extract
+  archive_extract(here("output/roads.zip"),
+                  "output/roads/")
+}
+
+```
+
+## Train data
+Train data are from Humanitarian OpenStreetMap Team.
+
+```{r}
+if(!"trains.zip" %in% (here("output") |> list.files())) {
+  # download
+  download.file("https://export.hotosm.org/downloads/c5cc333b-1bfa-4621-b521-273206860c0b/hotosm_tza_railways_lines_shp.zip",
+                here("output/trains.zip"))
+  # extract
+  archive_extract(here("output/trains.zip"),
+                  "output/trains/")
+}
+```
+## City data
+
+```{r}
+
+library(maps)
+data("world.cities")
+
+```
+
