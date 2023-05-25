@@ -47,3 +47,8 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# input/output
+assignment-pdf/
+input/
+output/
