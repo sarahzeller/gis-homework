@@ -53,10 +53,11 @@ tanzania <- ne_states(country = "United Republic of Tanzania",
                       returnclass = "sf") |> 
   st_transform(crs = crs_africa)
 
-coast <- ne_coastline(returnclass = "sf") |> 
-  st_transform(crs = crs_africa) |> 
-  st_intersection(tanzania_whole |> 
-                    st_buffer(2)) # buffer b/c overlap is not complete
+coast <- tanzania_whole |> 
+  st_intersection(ne_coastline(scale = 10,
+                               returnclass = "sf") |>
+                    st_transform(crs = crs_africa))
+
 ```
 
 ```{r}
@@ -307,25 +308,104 @@ We still need to download some.
 #| label: calculate-dist-road
 
 # calculate distance to nearest neighbor road
-if (here("output/nn_roads.rds") |> file.exists()) {
-  nn_poly <- readRDS("output/nn_roads.rds")
+if (here("output/nn_paved_roads.rds") |> file.exists()) {
+  nn_paved_roads <- readRDS("output/nn_paved_roads.rds")
 } else {
-  nn_roads <- st_nn(open_cell,
-                   roads,
-                   returnDist = TRUE)
-  saveRDS(nn_poly, 
-          "output/nn_roads.rds")
+  nn_paved_roads <- st_nn(open_cell,
+                          paved_roads,
+                          returnDist = TRUE)
+  saveRDS(nn_paved_roads,
+          "output/nn_paved_roads.rds")
 
 }
 # extract distances
-dists_roads <- sapply(nn_roads[[2]], "[", 1)
+dists_roads <- sapply(nn_paved_roads[[2]], "[", 1)
 ```
+
+```{r}
+#| label: calculate-dist-train
+
+# calculate distance to nearest neighbor road
+if (here("output/nn_trains.rds") |> file.exists()) {
+  nn_trains <- readRDS("output/nn_trains.rds")
+} else {
+  nn_trains <- st_nn(open_cell,
+                          trains,
+                          returnDist = TRUE)
+  saveRDS(nn_trains,
+          "output/nn_trains.rds")
+
+}
+# extract distances
+dists_trains <- sapply(nn_trains[[2]], "[", 1)
+```
+
+
+```{r}
+#| label: calculate-dist-coast
+
+# calculate distance to nearest neighbor road
+if (here("output/nn_coast.rds") |> file.exists()) {
+  nn_coast <- readRDS("output/nn_coast.rds")
+} else {
+  nn_coast <- st_nn(open_cell,
+                          coast,
+                          returnDist = TRUE)
+  saveRDS(nn_coast,
+          "output/nn_coast.rds")
+}
+# extract distances
+dists_coast <- sapply(nn_coast[[2]], "[", 1)
+
+```
+
+```{r}
+#| label: calculate-distance-borders
+
+# calculate distance to nearest neighbor road
+if (here("output/nn_border.rds") |> file.exists()) {
+  nn_border <- readRDS("output/nn_border.rds")
+} else {
+  nn_border <- st_nn(open_cell,
+                     tanzania_whole,
+                     returnDist = TRUE)
+  saveRDS(nn_border,
+          "output/nn_border.rds")
+}
+# extract distances
+dists_border <- sapply(nn_border[[2]], "[", 1)
+```
+
+```{r}
+#| label: calculate-distance-capital
+
+# calculate distance to nearest neighbor road
+if (here("output/nn_capital.rds") |> file.exists()) {
+  nn_capital <- readRDS("output/nn_capital.rds")
+} else {
+  nn_capital <- st_nn(open_cell,
+                      # Dodoma location
+                      cities |> filter(name == "Dodoma"),
+                      returnDist = TRUE)
+  saveRDS(nn_capital,
+          "output/nn_capital.rds")
+}
+# extract distances
+dists_capital <- sapply(nn_capital[[2]], "[", 1)
+
+```
+
 
 ```{r}
 #| label: merge-dist-w-opencell
 # merge into open_cell data frame
 open_cell_w_distances <- open_cell |> 
-  mutate(dist_road_km = dists_roads / 1000)
+  mutate(dist_road_km = dists_roads / 1000,
+         dist_train_km = dists_trains / 1000,
+         dist_coast_km = dists_coast / 1000,
+         dist_border_km = dists_coast / 1000,
+         dist_capital_km = dists_capital / 1000)
 
+saveRDS(open_cell_w_distances,
+        here("output/open_cell_w_distances.rds"))
 ```
-
