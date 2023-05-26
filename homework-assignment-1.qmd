@@ -9,8 +9,10 @@ format:
 execute:
   warning: false
   echo: false
-    
+bibliography: references.bib
 ---
+
+In this report, we're having a look at cell phone towers in Tanzania, and estimate when they are built.
 
 ```{r}
 #| label: load-packages
@@ -25,10 +27,12 @@ library(rnaturalearth)
 library(rnaturalearthhires)
 library(osmdata)
 library(nngeo)
+library(modelsummary)
+library(kableExtra)
+library(labelled)
 
 crs_africa <- "ESRI:102022"
 ```
-
 
 ```{r}
 #| label: check-for-output-folder
@@ -37,9 +41,17 @@ if (!"output" %in% (here() |> list.files())) {
 }
 ```
 
-
 ## Project region
 
+Before diving into the details, let's have a look at the region we are talking about.
+@fig-locator-map shows where in the world our country of interest lies, while @fig-basemap shows some political details.
+Tanzania lies in Eastern Africa, with its coast towards the Indian Ocean.
+It is divided into 30 states.
+Most importantly, we can see Tanzania's borders and the coast line.
+We will include both in the later regression analysis.
+Possibly, countries decide to build cell phone towers further away from the border because neighboring countries may already provide the infrastructure.
+Close to the coastline, it is also possible that the terrain is more even or that other infrastructure is already laid out; this may make it easier to build cell phone towers.
+Also, tourism may be more important close to the coast, which may drive an early pressure to build cell phone towers.
 
 ```{r}
 #| label: load-tanzania
@@ -122,8 +134,21 @@ basemap <-
 basemap
 ```
 
-
 ## Antennas in Tanzania
+
+Our focus in this report is on cell phone antennas in Tanzania.
+Therefore, let's have a look at where cell phone towers were built until end of 2022.
+Data come from Open Cell ID.
+@fig-map-cellid shows when antennas were built for three different technologies:
+
+-   GSM (aka 2G)
+-   UMTS (aka 3G)
+-   LTE (aka 4G)
+
+We can see that LTE antennas only started being built recently.
+The islands appear to be rather newly connected as well.
+Also, the pattern of both GSM and UMTS antennas indicates a line along which many of them were built; this may be a road or similar infrastructure.
+Large areas of land in the West and South East are not covered by any antennas so far.
 
 ```{r}
 #| label: load-cellid
@@ -163,10 +188,21 @@ basemap +
         legend.margin = margin(t = 1))
 ```
 
-
-
 ## Road data
+
+In @fig-map-cellid, we could discern some patterns that seemed like roads or railways.
+We therefore have a look at road and railway data.
+However, we focus on roads that are paved.
+This is because it seems likely that more robust infrastructure is needed to install the necessary cables to connect antennas to the internet.
+We expect paved roads to be centrally planned by government, with thoughts to such developments, where it should be easier to install cables.
 Road data are from GRIP: global roads database.
+
+@fig-map-roads shows the paved road network in Tanzania.
+There is a dense spot on the Northern coast: Dar es Salaam, the most populous city.
+Besides that, there are some regional clusters where more roads are paved, and some longer roads connect the whole country.
+The same pattern as with the antennas appears: in the West and South East, the road network is less dense.
+It is also noticeable that a lot of roads lead to borders.
+For the islands, on the other hand, there are at least no data on paved roads.
 
 ```{r}
 #| label: download-data-roads
@@ -203,7 +239,6 @@ paved_roads <- roads |>
 
 ```
 
-
 ```{r}
 #| label: fig-map-roads
 #| fig-cap: Paved roads in Tanzania
@@ -214,9 +249,13 @@ basemap +
   labs(caption = "Data: Global Road Inventory Project") 
 ```
 
-
 ## Train data
+
+After having a look at the road network, we examine a more historical network: the railways.
+These date back to the late 19th century and cover less ground than the road network.
 Train data are from Humanitarian OpenStreetMap Team.
+@fig-map-trains shows the railroad network.
+It connects the West with the coast; all lines end in on point, probably Dar es Salaam with its harbour.
 
 ```{r}
 if(!"trains.zip" %in% (here("output") |> list.files())) {
@@ -236,7 +275,6 @@ trains <- here("output/trains/hotosm_tza_railways_lines.shp") |>
   st_transform(crs = crs_africa)
 ```
 
-
 ```{r}
 #| label: fig-map-trains
 #| fig-cap: Railroads
@@ -248,8 +286,15 @@ basemap +
   labs(caption = "Data: Open Street Maps")
 ```
 
-
 ## City data
+
+Additionally to infrastructure, population is important.
+Where there are people, there is an increased need for cell phone reception.
+While there are also applications for agriculture, it would seem more urgent to prioritize more voters during the first roll-out.
+@fig-map-cities shows cities in Tanzania; data come from the `maps` package in R.
+A similar pattern as before emerges: the West and South East are not as densely populated.
+While Dodoma is the capital, it only has a quarter of the population of the largest Tanzanian city, Dar es Salaam.
+It may thus be prudent to include both cities in the analysis.
 
 ```{r}
 #| label: load-cities
@@ -359,7 +404,6 @@ if (here("output/nn_trains.rds") |> file.exists()) {
 # extract distances
 dists_trains <- sapply(nn_trains[[2]], "[", 1)
 ```
-
 
 ```{r}
 #| label: calculate-dist-coast
