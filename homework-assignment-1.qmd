@@ -299,10 +299,30 @@ basemap +
 ```
 
 ## OSM data
-These are still missing. 
+
+These are still missing.
 We still need to download some.
 
 ## Calculuating distances
+
+Now that we have described all variables, we calculate the distance from cell phone towers to the (nearest)
+
+-   road
+-   railway
+-   coast
+-   border
+-   capital.
+
+To calculate the distances correctly, we first project the geometries to the *WGS 1984 Albers for Africa* equal area projection (ESRI:102022).
+Then, we use the `nngeo` [@nngeo] package, and its function `st_nn`.
+For each cell phone tower, it calculates the distance to the nearest neighbour.
+Instead of receiving a matrix, we simply get a list with two vectors.
+The first vector includes the index for the nearest neighbour for each cell phone tower.
+The second vector includes the distance to this nearest neighbour.
+We do this for each variable of interest.
+When merging those distances with the Open Cell ID data, we transform them into kilometers.
+
+
 
 ```{r}
 #| label: calculate-dist-road
@@ -395,17 +415,57 @@ dists_capital <- sapply(nn_capital[[2]], "[", 1)
 
 ```
 
-
 ```{r}
 #| label: merge-dist-w-opencell
 # merge into open_cell data frame
 open_cell_w_distances <- open_cell |> 
-  mutate(dist_road_km = dists_roads / 1000,
-         dist_train_km = dists_trains / 1000,
-         dist_coast_km = dists_coast / 1000,
-         dist_border_km = dists_coast / 1000,
-         dist_capital_km = dists_capital / 1000)
+  mutate(dist_road_km = labelled(dists_roads / 1000, 
+                                 label = "Distance to road (km)"),
+         dist_train_km = labelled(dists_trains / 1000, 
+                                  label = "Distance to railway (km)"),
+         dist_coast_km = labelled(dists_coast / 1000, 
+                                  label = "Distance to coast (km)"),
+         dist_border_km = labelled(dists_coast / 1000, 
+                                   label = "Distance to border (km)"),
+         dist_capital_km = labelled(dists_capital / 1000, 
+                                    label = "Distance to capital (km)"))
 
 saveRDS(open_cell_w_distances,
         here("output/open_cell_w_distances.rds"))
 ```
+
+
+```{r}
+#| label: tbl-summary-vars
+#| tbl-cap: Distance summaries
+
+selected_cols <- c("dist_road_km",
+                   "dist_train_km",
+                   "dist_coast_km",
+                   "dist_border_km",
+                   "dist_capital_km")
+
+tmp_list <- open_cell_w_distances |> 
+  select(all_of(selected_cols)) |>
+  as.data.frame() |> 
+  select(-geometry) |> 
+  lapply(na.omit) |> 
+  lapply(scale)
+
+# formatting things
+emptycol <- function(x) " "
+f <- function(x) format(round(x, 2), big.mark=",")
+# formula
+formula <- paste(
+  paste(paste0(selected_cols), collapse = "+"), 
+  '~ N + Mean + SD + Median + Min + Max + Heading("Histogram") * emptycol')
+
+datasummary(formula = as.formula(formula),
+            data = open_cell_w_distances,
+            format = f,
+            output = "data.frame") |> 
+  kbl(booktabs = TRUE) |> 
+  column_spec(column = 7, image = spec_hist(tmp_list))
+
+```
+
