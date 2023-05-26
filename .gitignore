@@ -49,6 +49,6 @@ po/*~
 rsconnect/
 
 # input/output
-assignment-pdf/
 input/
 output/
+*.pdf
