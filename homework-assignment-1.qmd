@@ -1,37 +1,168 @@
 ---
 author: Sarah Zeller
 title: Homework assignment 1
+subtitle: Predicting mobile coverage years in Tanzania
 format:
   pdf:
     toc: true
 
-render:
-  messages: false
+execute:
+  warning: false
+  echo: false
     
 ---
 
 ```{r}
 #| label: load-packages
 
+library(here)
 library(archive)
 library(sf)
+library(mapview)
+library(ggtext)
 library(tidyverse)
 library(rnaturalearth)
 library(rnaturalearthhires)
 library(osmdata)
+library(nngeo)
+
+crs_africa <- "ESRI:102022"
 ```
 
 
 ```{r}
-#| label: check-for-output
-
-library(here)
+#| label: check-for-output-folder
 if (!"output" %in% (here() |> list.files())) {
   here("output") |> dir.create()
 }
+```
 
+
+## Project region
+
+
+```{r}
+#| label: load-tanzania
+
+tanzania_whole <- ne_countries(country = "United Republic of Tanzania",
+                               scale = 10,
+                               returnclass = "sf") |> 
+  st_transform(crs = crs_africa)
+
+tanzania <- ne_states(country = "United Republic of Tanzania",
+                      returnclass = "sf") |> 
+  st_transform(crs = crs_africa)
+
+coast <- ne_coastline(returnclass = "sf") |> 
+  st_transform(crs = crs_africa) |> 
+  st_intersection(tanzania_whole |> 
+                    st_buffer(2)) # buffer b/c overlap is not complete
+```
+
+```{r}
+#| label: fig-locator-map
+#| fig-cap: Research area is located in Tanzania.
+
+world <- ne_countries(scale = "small",
+                      returnclass = "sf") |> 
+  st_cast('MULTILINESTRING') |> 
+  st_cast('LINESTRING', do_split = TRUE) |> 
+  mutate(npts = npts(geometry, by_feature = TRUE)) |> 
+  st_cast('POLYGON')
+
+ggplot() +
+  geom_sf(data = world,
+          aes(fill = sovereignt == "United Republic of Tanzania")) +
+  scale_fill_manual(values = c("grey90",
+                               "#1EB53A")) +
+  guides(fill = FALSE) +
+  coord_sf(crs = "+proj=ortho +lat_0=5 +lon_0=-10") +
+  labs(caption = "Data: Natural Earth") +
+  theme_void()
 
 ```
+
+```{r}
+#| label: fig-basemap
+#| fig-cap: Political map of Tanzania
+
+africa <- ne_countries(continent = "africa",
+                       scale = 10,
+                       returnclass = "sf") |> 
+  st_transform(crs = crs_africa)
+
+bounds <- tanzania_whole |> 
+  st_buffer(100000) |> 
+  st_bbox()
+
+basemap <- 
+  ggplot() +
+  geom_sf(data = africa,
+          fill = "grey90",
+          col = "grey80") +
+  geom_sf(data = tanzania,
+          fill = "white",
+          col = "grey70") +
+  coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax),
+           crs = crs_africa) +
+  annotate("text",
+           label = "Indian \nOcean",
+           x = 1650000,
+           y = -1100000,
+           size = 2.5,
+           lineheight = .75,
+           colour = "grey40") +
+  theme_void() +
+  theme(panel.background = element_rect(fill = alpha("cornflowerblue", .4),
+                                        colour = NA)) +
+  labs(caption = "Data: Natural Earth")
+
+basemap
+```
+
+
+## Antennas in Tanzania
+
+```{r}
+#| label: load-cellid
+here("input/opencellid_tanzania.RData") |> load()
+
+open_cell <- opencellid_tanzania |> 
+  # convert to sf and project to Africa equal area projection
+  st_as_sf(coords = c("lon", "lat"),
+           crs = 4326) |> 
+  st_transform(crs = crs_africa) |> 
+  filter(created_year <= 2022) |> # complete years
+  mutate(across(c(created, updated), as_datetime)) |> 
+  mutate(created_year = year(created) |> as.integer(),
+         create_month = month(created)) |> 
+  # order 2G/3G/4G
+  mutate(radio = factor(radio, 
+                        levels = c("GSM", "UMTS", "LTE"), 
+                        ordered = TRUE))
+```
+
+```{r}
+#| label: fig-map-cellid
+#| fig-cap: Cell phone towers in Tanzania
+
+basemap + 
+  geom_sf(data = open_cell |> st_jitter(), 
+          aes(col = created_year),
+          size = .1) +
+  facet_wrap(~radio) +
+  # have to set this again after facet_wrap
+  coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax)) +
+  labs(caption = "Data: OpencellID",
+       col = "Construction year") +
+  theme(legend.position = "bottom",
+        legend.key.width = unit(1, "cm"),
+        legend.margin = margin(t = 1))
+```
+
+
 
 ## Road data
 Road data are from GRIP: global roads database.
@@ -54,6 +185,35 @@ if (!"roads.zip" %in% (here("output") |> list.files())) {
 
 ```
 
+```{r}
+#| label: load-roads
+
+roads <- here("output/roads/GRIP4_region3.shp") |> 
+  read_sf() |> 
+  # pre-filter for Southern Africa
+  filter(GP_RRG == 10) |> 
+  st_transform(crs = crs_africa) |> 
+  # make sure it's limited to Tanzania
+  st_intersection(tanzania_whole)
+
+paved_roads <- roads |> 
+  # filter for paved roads
+  mutate(GP_RSE == 1) 
+
+```
+
+
+```{r}
+#| label: fig-map-roads
+#| fig-cap: Paved roads in Tanzania
+basemap +
+  geom_sf(data = paved_roads) +
+    coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax)) +
+  labs(caption = "Data: Global Road Inventory Project") 
+```
+
+
 ## Train data
 Train data are from Humanitarian OpenStreetMap Team.
 
@@ -67,12 +227,105 @@ if(!"trains.zip" %in% (here("output") |> list.files())) {
                   "output/trains/")
 }
 ```
+
+```{r}
+#| label: load-trains
+trains <- here("output/trains/hotosm_tza_railways_lines.shp") |> 
+  read_sf() |> 
+  st_transform(crs = crs_africa)
+```
+
+
+```{r}
+#| label: fig-map-trains
+#| fig-cap: Railroads
+
+basemap + 
+  geom_sf(data = trains) +
+  coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax)) +
+  labs(caption = "Data: Open Street Maps")
+```
+
+
 ## City data
 
 ```{r}
+#| label: load-cities
 
 library(maps)
 data("world.cities")
+
+cities <- world.cities |> 
+  filter(country.etc == "Tanzania") |> 
+  # set capital as boolean
+  mutate(capital = capital == 1,
+         size = case_when(pop > 2e6 ~ "> 2 million",
+                          pop > 1e5 & pop < 2e6 ~ "> 100,000",
+                          pop <= 1e5 ~ "< 100,000")) |> 
+  st_as_sf(coords = c("long", "lat"),
+           crs = 4326) |> 
+  st_transform(crs = crs_africa)
+```
+
+```{r}
+#| label: fig-map-cities
+#| fig-cap: Cities in Tanzania
+
+basemap + 
+  geom_sf(data = cities,
+          aes(size = size,
+              col = capital | name == "Dar es Salaam"),
+          alpha = .5) +
+  coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax)) +
+  scale_colour_manual(values = c("grey40",
+                                 "darkred")) +
+  annotate("text",
+           label = c("Dodoma",
+                   "Dar es \nSalaam"),
+           col = "darkred",
+           size = 2.5,
+           lineheight = 1,
+           x = c(1130000,
+                 1585350),
+           y = c(-700000,
+                 -700799)) +
+  guides(col = FALSE) +
+  labs(caption = "Data: {maps} library",
+         size = "Population")
+
+```
+
+## OSM data
+These are still missing. 
+We still need to download some.
+
+## Calculuating distances
+
+```{r}
+#| label: calculate-dist-road
+
+# calculate distance to nearest neighbor road
+if (here("output/nn_roads.rds") |> file.exists()) {
+  nn_poly <- readRDS("output/nn_roads.rds")
+} else {
+  nn_roads <- st_nn(open_cell,
+                   roads,
+                   returnDist = TRUE)
+  saveRDS(nn_poly, 
+          "output/nn_roads.rds")
+
+}
+# extract distances
+dists_roads <- sapply(nn_roads[[2]], "[", 1)
+```
+
+```{r}
+#| label: merge-dist-w-opencell
+# merge into open_cell data frame
+open_cell_w_distances <- open_cell |> 
+  mutate(dist_road_km = dists_roads / 1000)
 
 ```
 
