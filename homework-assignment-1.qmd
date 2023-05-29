@@ -166,7 +166,12 @@ open_cell <- opencellid_tanzania |>
   # order 2G/3G/4G
   mutate(radio = factor(radio, 
                         levels = c("GSM", "UMTS", "LTE"), 
-                        ordered = TRUE))
+                        ordered = TRUE))|> 
+  # add state and subset for only antennas within known states
+  st_intersection(open_cell,
+                  tanzania |> transmute(state = name)) 
+
+
 ```
 
 ```{r}
