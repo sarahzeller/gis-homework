@@ -417,6 +417,11 @@ The second vector includes the distance to this nearest neighbour.
 We do this for each variable of interest.
 When merging those distances with the Open Cell ID data, we transform them into kilometers.
 
+Additionally, we determine whether a cell phone tower is on an island.
+In this case, we still determine the distance to the coast; but we set the distance to the border to the mean value of the mainland distances.
+This is because we do not have the precise outline of the border in the ocean.
+We consequently add an island dummy to the analysis.
+
 ```{r}
 #| label: calculate-dist-road
 
@@ -487,6 +492,22 @@ if (here("output/nn_border.rds") |> file.exists()) {
 # extract distances
 dists_border <- sapply(nn_border[[2]], "[", 1)
 ```
+```{r}
+#| label: check-if-on-island
+
+if (here("output/on_island.rds") |> file.exists()) {
+  on_island <- readRDS("output/on_island.rds")
+} else {
+  on_island <- st_intersects(open_cell,
+                             islands |> st_buffer(10000))
+  saveRDS(on_island,
+          "output/on_island.rds")
+}
+# extract distances
+is_on_island <- on_island %>% lengths > 0
+
+```
+
 
 ```{r}
 #| label: calculate-distance-capital
@@ -522,8 +543,18 @@ open_cell_w_distances <- open_cell |>
                                    label = "Distance to border (km)"),
          dist_coast_km = labelled(dists_coast / 1000, 
                                   label = "Distance to coast (km)"),
+         on_island = labelled(is_on_island |> as.integer(),
+                              label = "Island position"),
          dist_capital_km = labelled(dists_capital / 1000, 
-                                    label = "Distance to capital (km)"))
+                                    label = "Distance to capital (km)")) |> 
+  # account for islands
+  mutate(dist_border_km = ifelse(is_on_island, NA, dist_border_km)) 
+
+fill_value <- open_cell_w_distances$dist_border_km |> mean(na.rm = TRUE)
+
+open_cell_w_distances <- open_cell_w_distances |>
+  mutate(dist_border_km = ifelse(is_on_island, fill_value, dist_border_km) |> 
+           labelled(label = "Distance to border (km)"))
 
 saveRDS(open_cell_w_distances,
         here("output/open_cell_w_distances.rds"))
@@ -537,7 +568,8 @@ selected_cols <- c("dist_road_km",
                    "dist_train_km",
                    "dist_border_km",
                    "dist_coast_km",
-                   "dist_capital_km")
+                   "dist_capital_km",
+                   "on_island")
 
 # prepare histogram sparklines
 tmp_list <- open_cell_w_distances |> 
@@ -587,8 +619,7 @@ We run the following specifications:
 
 formula <- reformulate(open_cell_w_distances |>
                          as.data.frame() |>  # take out geometry
-                         select(starts_with("dist_")) |> # select all distances
-                         select(-dist_coast_km) |> # de-select coastline since it is colinear with border
+                         select(starts_with(c("dist_","on_"))) |> # select all distances
                          names(),
                        "created_year")
 
