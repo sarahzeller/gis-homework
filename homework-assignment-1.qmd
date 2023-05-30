@@ -30,6 +30,12 @@ library(nngeo)
 library(modelsummary)
 library(kableExtra)
 library(labelled)
+library(fixest)
+library(fwildclusterboot)
+
+
+here("run_regressions.R") |> source()
+here("show_regressions.R") |> source()
 
 crs_africa <- "ESRI:102022"
 ```
@@ -41,7 +47,7 @@ if (!"output" %in% (here() |> list.files())) {
 }
 ```
 
-## Project region
+# Project region
 
 Before diving into the details, let's have a look at the region we are talking about.
 @fig-locator-map shows where in the world our country of interest lies, while @fig-basemap shows some political details.
@@ -134,10 +140,13 @@ basemap <-
 basemap
 ```
 
+# Data
+
 ## Antennas in Tanzania
 
 Our focus in this report is on cell phone antennas in Tanzania.
 Therefore, let's have a look at where cell phone towers were built until end of 2022.
+We only consider on antennas that fall within the boundaries of one of Tanzania's states.
 Data come from Open Cell ID.
 @fig-map-cellid shows when antennas were built for three different technologies:
 
@@ -168,8 +177,7 @@ open_cell <- opencellid_tanzania |>
                         levels = c("GSM", "UMTS", "LTE"), 
                         ordered = TRUE))|> 
   # add state and subset for only antennas within known states
-  st_intersection(open_cell,
-                  tanzania |> transmute(state = name)) 
+  st_intersection(tanzania |> transmute(state = name)) 
 
 
 ```
@@ -468,14 +476,17 @@ dists_capital <- sapply(nn_capital[[2]], "[", 1)
 #| label: merge-dist-w-opencell
 # merge into open_cell data frame
 open_cell_w_distances <- open_cell |> 
+  mutate(state_id = state |> as.factor() |> as.integer()) |> 
+  mutate(state = labelled(state, 
+                          label = "State")) |> 
   mutate(dist_road_km = labelled(dists_roads / 1000, 
                                  label = "Distance to road (km)"),
          dist_train_km = labelled(dists_trains / 1000, 
                                   label = "Distance to railway (km)"),
-         dist_coast_km = labelled(dists_coast / 1000, 
-                                  label = "Distance to coast (km)"),
          dist_border_km = labelled(dists_coast / 1000, 
                                    label = "Distance to border (km)"),
+         dist_coast_km = labelled(dists_coast / 1000, 
+                                  label = "Distance to coast (km)"),
          dist_capital_km = labelled(dists_capital / 1000, 
                                     label = "Distance to capital (km)"))
 
@@ -490,10 +501,11 @@ saveRDS(open_cell_w_distances,
 
 selected_cols <- c("dist_road_km",
                    "dist_train_km",
-                   "dist_coast_km",
                    "dist_border_km",
+                   "dist_coast_km",
                    "dist_capital_km")
 
+# prepare histogram sparklines
 tmp_list <- open_cell_w_distances |> 
   select(all_of(selected_cols)) |>
   as.data.frame() |> 
@@ -517,4 +529,74 @@ datasummary(formula = as.formula(formula),
   column_spec(column = 7, image = spec_hist(tmp_list))
 
 ```
+# Regression results
+In the next step, we want to analyze what determines the timing of antenna construction.
+We do this separately for each technology: GSM, UMTS and LTE.
+We use the `fixest` package to run regressions with the amassed data set.
+We then use the `modelsummary` package to show the regression output.
 
+We run the following specifications:
+
+(1)   baseline OLS
+(2)   OLS with fixed effects (FE-OLS) on state-level
+(3)   FE-OLS with state-level clustered standard errors
+(4)   FE-OLS with heteroskedasticity-robust standard errors (White correction)
+(5)   FE-OLS with Conley standard errors
+
+## GSM
+
+```{r}
+#| label: run-regressions
+
+formula <- reformulate(open_cell_w_distances |>
+                         as.data.frame() |>  # take out geometry
+                         select(starts_with("dist_")) |> # select all distances
+                         select(-dist_coast_km) |> # de-select coastline since it is colinear with border
+                         names(),
+                       "created_year")
+
+
+gsm_list <- open_cell_w_distances |> 
+  filter(radio == "GSM") |> 
+  run_regressions(formula = formula)
+
+umts_list <- open_cell_w_distances |> 
+  filter(radio == "UMTS") |> 
+  run_regressions(formula = formula)
+
+lte_list <- open_cell_w_distances |> 
+  filter(radio == "LTE") |> 
+  run_regressions(formula = formula)
+
+```
+
+```{r}
+#| label: tbl-summary-gsm
+#| tbl-cap: Determinants of building a GSM antenna
+
+show_regressions(gsm_list)
+
+```
+
+## UMTS
+
+```{r}
+#| label: tbl-summary-umts
+#| tbl-cap: Determinants of building a UMTS antenna
+
+show_regressions(umts_list)
+
+```
+
+## LTE
+
+```{r}
+#| label: tbl-summary-lte
+#| tbl-cap: Determinants of building a LTE antenna
+
+show_regressions(lte_list)
+
+```
+
+
+# Conclusion
