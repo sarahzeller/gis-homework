@@ -1,16 +1,27 @@
 ---
-author: Sarah Zeller
+author: Sarah Zeller, Felix Werner
 title: Homework assignment 1
 subtitle: Predicting mobile coverage years in Tanzania
 format:
   pdf:
     toc: true
+    font: Open Sans
+    include-in-header: 
+      - text: |
+          % für Alignment bei Kommastelle
+          \usepackage{booktabs}
+          \usepackage{siunitx}
+          \sisetup{group-separator       = {,}, % default: \, ("thinspace")
+                  group-minimum-digits  = 3,   % default: 5
+                  input-decimal-markers = {.}} % default: "{.,}"
 
 execute:
   warning: false
   echo: false
 bibliography: references.bib
 ---
+
+{{< pagebreak >}}
 
 In this report, we're having a look at cell phone towers in Tanzania, and estimate when they are built.
 
@@ -32,6 +43,9 @@ library(kableExtra)
 library(labelled)
 library(fixest)
 library(fwildclusterboot)
+
+library(showtext)
+showtext_auto()
 
 
 here("run_regressions.R") |> source()
@@ -97,7 +111,8 @@ ggplot() +
   guides(fill = FALSE) +
   coord_sf(crs = "+proj=ortho +lat_0=5 +lon_0=-10") +
   labs(caption = "Data: Natural Earth") +
-  theme_void()
+  theme_void() +
+  theme(text = element_text(family = "Open Sans"))
 
 ```
 
@@ -134,7 +149,8 @@ basemap <-
            colour = "grey40") +
   theme_void() +
   theme(panel.background = element_rect(fill = alpha("cornflowerblue", .4),
-                                        colour = NA)) +
+                                        colour = NA),
+        text = element_text(family = "Open Sans")) +
   labs(caption = "Data: Natural Earth")
 
 basemap
@@ -147,8 +163,7 @@ basemap
 Our focus in this report is on cell phone antennas in Tanzania.
 Therefore, let's have a look at where cell phone towers were built until end of 2022.
 We only consider on antennas that fall within the boundaries of one of Tanzania's states.
-Data come from Open Cell ID.
-@fig-map-cellid shows when antennas were built for three different technologies:
+Data come from Open Cell ID. @fig-map-cellid shows when antennas were built for three different technologies:
 
 -   GSM (aka 2G)
 -   UMTS (aka 3G)
@@ -198,7 +213,8 @@ basemap +
        col = "Construction year") +
   theme(legend.position = "bottom",
         legend.key.width = unit(1, "cm"),
-        legend.margin = margin(t = 1))
+        legend.margin = margin(t = 1),
+        text = element_text(family = "Open Sans"))
 ```
 
 ## Road data
@@ -259,7 +275,8 @@ basemap +
   geom_sf(data = paved_roads) +
     coord_sf(xlim = c(bounds$xlim, bounds$xmax),
            ylim = c(bounds$ylim, bounds$ymax)) +
-  labs(caption = "Data: Global Road Inventory Project") 
+  labs(caption = "Data: Global Road Inventory Project") +
+  theme(text = element_text(family = "Open Sans"))
 ```
 
 ## Train data
@@ -296,7 +313,8 @@ basemap +
   geom_sf(data = trains) +
   coord_sf(xlim = c(bounds$xlim, bounds$xmax),
            ylim = c(bounds$ylim, bounds$ymax)) +
-  labs(caption = "Data: Open Street Maps")
+  labs(caption = "Data: Open Street Maps") +
+  theme(text = element_text(family = "Open Sans"))
 ```
 
 ## City data
@@ -352,7 +370,8 @@ basemap +
                  -700799)) +
   guides(col = FALSE) +
   labs(caption = "Data: {maps} library",
-         size = "Population")
+         size = "Population") +
+  theme(text = element_text(family = "Open Sans"))
 
 ```
 
@@ -361,7 +380,7 @@ basemap +
 These are still missing.
 We still need to download some.
 
-## Calculuating distances
+## Calculating distances
 
 Now that we have described all variables, we calculate the distance from cell phone towers to the (nearest)
 
@@ -379,8 +398,6 @@ The first vector includes the index for the nearest neighbour for each cell phon
 The second vector includes the distance to this nearest neighbour.
 We do this for each variable of interest.
 When merging those distances with the Open Cell ID data, we transform them into kilometers.
-
-
 
 ```{r}
 #| label: calculate-dist-road
@@ -494,7 +511,6 @@ saveRDS(open_cell_w_distances,
         here("output/open_cell_w_distances.rds"))
 ```
 
-
 ```{r}
 #| label: tbl-summary-vars
 #| tbl-cap: Distance summaries
@@ -517,31 +533,34 @@ tmp_list <- open_cell_w_distances |>
 emptycol <- function(x) " "
 f <- function(x) format(round(x, 2), big.mark=",")
 # formula
-formula <- paste(
+formula_summary <- paste(
   paste(paste0(selected_cols), collapse = "+"), 
   '~ N + Mean + SD + Median + Min + Max + Heading("Histogram") * emptycol')
 
-datasummary(formula = as.formula(formula),
+datasummary(formula = as.formula(formula_summary),
             data = open_cell_w_distances,
             format = f,
             output = "data.frame") |> 
-  kbl(booktabs = TRUE) |> 
-  column_spec(column = 7, image = spec_hist(tmp_list))
+  kbl(booktabs = TRUE,
+      align = c("l", rep("r", 6), "c")) |> 
+  column_spec(column = 8, image = spec_hist(tmp_list))
 
 ```
+
 # Regression results
+
 In the next step, we want to analyze what determines the timing of antenna construction.
 We do this separately for each technology: GSM, UMTS and LTE.
-We use the `fixest` package to run regressions with the amassed data set.
-We then use the `modelsummary` package to show the regression output.
+We use the `fixest` package [@fixest] to run regressions with the amassed data set.
+We then use the `modelsummary` [@modelsummary] package to show the regression output.
 
 We run the following specifications:
 
-(1)   baseline OLS
-(2)   OLS with fixed effects (FE-OLS) on state-level
-(3)   FE-OLS with state-level clustered standard errors
-(4)   FE-OLS with heteroskedasticity-robust standard errors (White correction)
-(5)   FE-OLS with Conley standard errors
+(1) baseline OLS
+(2) OLS with fixed effects (FE-OLS) on state-level
+(3) FE-OLS with state-level clustered standard errors
+(4) FE-OLS with heteroskedasticity-robust standard errors (White correction)
+(5) FE-OLS with Conley standard errors
 
 ## GSM
 
@@ -598,5 +617,8 @@ show_regressions(lte_list)
 
 ```
 
-
 # Conclusion
+
+{{< pagebreak >}}
+
+# References {.unnumbered}
