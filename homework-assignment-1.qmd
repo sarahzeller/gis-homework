@@ -54,6 +54,7 @@ showtext_auto()
 
 here("run_regressions.R") |> source()
 here("show_regressions.R") |> source()
+st_erase <- function(x, y) st_difference(x, st_union(st_combine(y)))
 
 crs_africa <- "ESRI:102022"
 ```
@@ -90,9 +91,22 @@ tanzania <- ne_states(country = "United Republic of Tanzania",
   st_transform(crs = crs_africa)
 
 coast <- tanzania_whole |> 
+  st_transform(crs = 4326) |> 
+  st_buffer(10) |> 
   st_intersection(ne_coastline(scale = 10,
-                               returnclass = "sf") |>
-                    st_transform(crs = crs_africa))
+                               returnclass = "sf")) |> 
+    st_transform(crs = crs_africa)
+
+islands <- tanzania_whole |> 
+  st_cast('MULTILINESTRING') |> 
+  st_cast('LINESTRING', do_split = TRUE) %>%
+  `[`(2:7,) # select islands
+
+borders <- tanzania_whole |> 
+  st_cast('MULTILINESTRING') |> 
+  st_cast('LINESTRING', do_split = TRUE) %>%
+  `[`(1,) |> # select mainland
+  st_erase(coast |> st_buffer(1)) # buffer slightly to create overlap
 
 ```
 
