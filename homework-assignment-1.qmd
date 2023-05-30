@@ -5,7 +5,7 @@ subtitle: Predicting mobile coverage years in Tanzania
 format:
   pdf:
     toc: true
-    font: Open Sans
+    mainfont: "Open Sans"
     include-in-header: 
       - text: |
           % für Alignment bei Kommastelle
@@ -14,6 +14,10 @@ format:
           \sisetup{group-separator       = {,}, % default: \, ("thinspace")
                   group-minimum-digits  = 3,   % default: 5
                   input-decimal-markers = {.}} % default: "{.,}"
+          % alle Tabellen kleiner setzen
+          \usepackage{etoolbox}
+          \AtBeginEnvironment{longtable}{\footnotesize}
+          \AtBeginEnvironment{tabular}{\footnotesize}
 
 execute:
   warning: false
