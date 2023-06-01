@@ -2,6 +2,7 @@ library(modelsummary)
 show_regressions <- function(regression_list) {
   modelsummary(regression_list,
                stars = TRUE,
+               note = 'Numbers in parentheses represent standard errors. Clustering is indicated in the row "Std.Errors". ',
                coef_rename = TRUE,
                coef_omit = "Intercept",
                gof_omit = "IC|Adj|RMSE",

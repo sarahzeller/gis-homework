@@ -484,7 +484,8 @@ basemap +
           aes(fill = lightnings_mean_2014)) +
   coord_sf(xlim = c(bounds$xlim, bounds$xmax),
            ylim = c(bounds$ylim, bounds$ymax)) +
-  labs(caption = "Data: NASA")
+  labs(caption = "Data: NASA",
+       fill = "Average lightning \nfrequency (2014)")
 ```
 
 
