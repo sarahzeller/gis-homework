@@ -3,8 +3,12 @@ author: Sarah Zeller
 title: Homework assignment 1
 subtitle: Predicting mobile coverage years in Tanzania
 format:
+  html: 
+    toc: true
+    mainfont: "Open Sans"
   pdf:
     toc: true
+    number-sections: true
     mainfont: "Open Sans"
     include-in-header: 
       - text: |
@@ -33,10 +37,13 @@ In this report, I'm having a look at cell phone towers in Tanzania, and estimate
 
 ```{r}
 #| label: install-packages
+#| echo: false
+#| output: false
+#| warning: false
 
-install.packages("renv")
+install.packages("renv", quiet = TRUE)
 renv::hydrate()
-install.packages("remotes")
+install.packages("remotes", quiet = TRUE)
 remotes::install_github("ropensci/rnaturalearthhires")
 ```
 
@@ -517,6 +524,11 @@ I consequently add an island dummy to the analysis.
 Lastly, I add the lightning frequency for the area in which each antenna lies.
 I do this by simply intersecting the lightning frequency polygons with the antenna points.
 
+@tbl-summary-vars shows the descriptive statistics for these variables.
+We can see that all variables have the same number of observations, implying that we have all variables for all antennas.
+For all variables, there is quite a range, and most are left-skewed.
+
+
 ```{r}
 #| label: calculate-dist-road
 
@@ -759,11 +771,12 @@ I run the following specifications:
 
 (1) baseline OLS
 (2) OLS with fixed effects (FE-OLS) on state-level and state-level clustered standard errors
-(4) (3) with heteroskedasticity-robust standard errors (White correction)
-(3) FE-OLS on raster-id level and with raster-level clustered standard errors (excluding the lightning variable, since it is colinear with the raster-id)
+(3) (2) with heteroskedasticity-robust standard errors (White correction)
+(4) FE-OLS on raster-id level and with raster-level clustered standard errors (excluding the lightning variable, since it is colinear with the raster-id)
 (5) FE-OLS with Conley standard errors
 
-## GSM
+
+
 
 ```{r}
 #| label: run-regressions
@@ -785,6 +798,16 @@ lte_list <- open_cell_w_distances |>
   run_regressions(formula = formula)
 
 ```
+## GSM
+@tbl-summary-gsm shows the regression results for the oldest technology: GSM.
+Overall, the explanatory power of the models is modest ($R^2 \approx 0.2$).
+However, it does increase when including FE; and more when the states are controlled for than if the raster IDs are controlled for.
+The only variable that is robust to all specifications is the distance to the next point of worship. 
+If it increases by $1km$, the building point of time for an antenna increases by $365 * 0.15 \approx 55$ days.
+The mean lightning frequency is also mostly robust, with a large positive and highly significant effect.
+If the mean lightning frequency increases from 0 to the maximum lightning frequency measured (0.00029), building an antenna is pushed back by approximately 9 months.
+
+All other effects are not robust, so I do not discuss them further.
 
 ```{r}
 #| label: tbl-summary-gsm
@@ -796,6 +819,13 @@ show_regressions(gsm_list)
 
 ## UMTS
 
+@tbl-summary-umts shows the regression results for the UMTS technology.
+The explanatory power is similar to the model for GSM technology: about 20% of variation are explained.
+Results are very similar to the GSM technology: distance to point of worship is highly significant and robust.
+It pushes the timing of building an antenna back.
+The same goes for the mean lightning frequency, which is also highly significant and robust.
+All other distances are not significant/robust.
+
 ```{r}
 #| label: tbl-summary-umts
 #| tbl-cap: Determinants of building a UMTS antenna
@@ -805,6 +835,14 @@ show_regressions(umts_list)
 ```
 
 ## LTE
+@tbl-summary-lte shows the regression results for the most recent antennas with LTE technology.
+Here, the results differ from the other two technologies.
+Firstly, the explanatory power is much higher ($R^2 \approx 0.5$).
+Also, the FE do not add much explanatory power.
+Interestingly, the distance to the next point of worship is not significant anymore.
+Instead, the distance to railways and to the borders becomes more important: while antennas closer to railways are built later, they are built sooner when they are closer to the border.
+
+Again, the mean lightning frequency in 2014 is significant and robust, but the effect is less pronounced than with the other two technologies.
 
 ```{r}
 #| label: tbl-summary-lte
@@ -814,7 +852,19 @@ show_regressions(lte_list)
 
 ```
 
-# Conclusion
+# Discussion and conclusion
+
+In this report, I analyzed determinants of the timing of building cell phone antennas in Tanzania.
+The mean lightning frequency appears to be a strong predictor, which is highly significant and robust to changing model specifications.
+This is little surprising, since it is used as an instrument in literature.
+
+It appears that the predictors vary from the old technology (GSM/2G and UMTS/3G) to the new (LTE/3G): the most important distance predictor changes from point of worship to railway.
+
+One interpretation is that with the older antennas, the focus was on reaching as many people as possible. 
+Where there are points of worship, there are more people.
+In more recent years, maybe more areas were already covered, so areas which are less densely populated may have been covered as well.
+This would explain why distance to railway is important: the closer an antenna point is to the railway, the sooner the antenna will be built.
+This could be because in less densely populated areas, already existing infrastructure, i.e. railways, are used heavily as a backbone for the new infrastructure, i.e. antennas.
 
 {{< pagebreak >}}
 
