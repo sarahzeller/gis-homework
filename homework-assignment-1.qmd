@@ -1,5 +1,5 @@
 ---
-author: Sarah Zeller, Felix Werner
+author: Sarah Zeller
 title: Homework assignment 1
 subtitle: Predicting mobile coverage years in Tanzania
 format:
@@ -29,7 +29,7 @@ editor:
 
 {{< pagebreak >}}
 
-In this report, we're having a look at cell phone towers in Tanzania, and estimate when they are built.
+In this report, I'm having a look at cell phone towers in Tanzania, and estimate when they are built.
 
 ```{r}
 #| label: install-packages
@@ -78,12 +78,12 @@ if (!"output" %in% (here() |> list.files())) {
 
 # Project region
 
-Before diving into the details, let's have a look at the region we are talking about.
+Before diving into the details, let's have a look at the region I am talking about.
 @fig-locator-map shows where in the world our country of interest lies, while @fig-basemap shows some political details.
 Tanzania lies in Eastern Africa, with its coast towards the Indian Ocean.
 It is divided into 30 states.
-Most importantly, we can see Tanzania's borders and the coast line.
-We will include both in the later regression analysis.
+Most importantly, I can see Tanzania's borders and the coast line.
+I will include both in the later regression analysis.
 Possibly, countries decide to build cell phone towers further away from the border because neighboring countries may already provide the infrastructure.
 Close to the coastline, it is also possible that the terrain is more even or that other infrastructure is already laid out; this may make it easier to build cell phone towers.
 Also, tourism may be more important close to the coast, which may drive an early pressure to build cell phone towers.
@@ -190,7 +190,7 @@ basemap
 
 Our focus in this report is on cell phone antennas in Tanzania.
 Therefore, let's have a look at where cell phone towers were built until end of 2022.
-We only consider on antennas that fall within the boundaries of one of Tanzania's states.
+I only consider on antennas that fall within the boundaries of one of Tanzania's states.
 Data come from Open Cell ID. @fig-map-cellid shows when antennas were built for three different technologies:
 
 -   GSM (aka 2G)
@@ -248,10 +248,10 @@ basemap +
 ## Road data
 
 In @fig-map-cellid, we could discern some patterns that seemed like roads or railways.
-We therefore have a look at road and railway data.
-However, we focus on roads that are paved.
+I therefore have a look at road and railway data.
+However, I focus on roads that are paved.
 This is because it seems likely that more robust infrastructure is needed to install the necessary cables to connect antennas to the internet.
-We expect paved roads to be centrally planned by government, with thoughts to such developments, where it should be easier to install cables.
+I expect paved roads to be centrally planned by government, with thoughts to such developments, where it should be easier to install cables.
 Road data are from GRIP: global roads database.
 
 @fig-map-roads shows the paved road network in Tanzania.
@@ -309,7 +309,7 @@ basemap +
 
 ## Train data
 
-After having a look at the road network, we examine a more historical network: the railways.
+After having a look at the road network, I examine a more historical network: the railways.
 These date back to the late 19th century and cover less ground than the road network.
 Train data are from Humanitarian OpenStreetMap Team.
 @fig-map-trains shows the railroad network.
@@ -414,17 +414,23 @@ I only use point features, since these are the most frequent.
 
 ```{r}
 #| label: load-pofw
-pofw <- 
-  getbb("Tanzania", featuretype = "country") |> 
-  opq(timeout = 100) |> 
-  add_osm_feature(key = "amenity",
-                  value = "place_of_worship") |> 
-  osmdata_sf() %>%
-  # filter out point layer
-  `[[`(4) |> 
-  # intersect with tanzania to only get Tanzanian pofw
-  st_transform(crs = crs_africa) |> 
-  st_intersection(tanzania_whole)
+
+if (!"pofw.rds" %in% (here("output") |> list.files())) {
+  pofw <-
+    getbb("Tanzania", featuretype = "country") |>
+    opq(timeout = 100) |>
+    add_osm_feature(key = "amenity",
+                    value = "place_of_worship") |>
+    osmdata_sf() %>%
+    # filter out point layer
+    `[[`(4) |>
+    # intersect with tanzania to only get Tanzanian pofw
+    st_transform(crs = crs_africa) |>
+    st_intersection(tanzania_whole)
+  pofw |> 
+    saveRDS(here("output/pofw.rds"))
+} else
+  pofw <- here("output/pofw.rds") |> readRDS()
 ```
 
 ```{r}
@@ -446,29 +452,69 @@ Little surprisingly, a similar image as with the other variables emerges: the po
 However, these data are more detailed and may show city centers, or areas where there is still room for building new infrastructure.
 They also show areas where the local population has enough income to build points of worship.
 
+## Lightning frequency
+
+Lightning frequency may influence whether an antenna is built: it makes it more difficult for technicians to set them up.
+This frequency has also been used as an instrument for mobile internet antennas in recent papers.
+I obtained the data from (NASA)[https://ghrc.nsstc.nasa.gov/lightning/] and already pre-cleaned the lightning dataset for another project, so here, I will use the cleaned dataset.
+It contains the lightning frequency for 50x50 $km^2$ raster areas, as an average of all days in 2014.
+I intersect this dataset with Tanzania to retain only the areas of interest.
+The dataset also includes a raster ID for each raster.
+
+```{r}
+#| label: load-lightning
+
+if (!"lightning.rds" %in% (here("output") |> list.files())) {
+  lightning <- here("input/lightnings_2014.rds") |> 
+    readRDS() |> 
+    st_transform(crs = crs_africa) |> 
+    st_intersection(tanzania_whole$geometry)
+  lightning |> 
+    saveRDS(here("output/lightning.rds"))
+} else
+  lightning <- here("output/lightning.rds") |> readRDS()
+```
+
+```{r}
+#| label: fig-lightning
+#| fig-cap: Lightning frequencies
+
+basemap +
+  geom_sf(data = lightning,
+          aes(fill = lightnings_mean_2014)) +
+  coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax)) +
+  labs(caption = "Data: NASA")
+```
+
+
 ## Calculating distances
 
-Now that we have described all variables, we calculate the distance from cell phone towers to the (nearest)
+Now that I have described all variables, I calculate the distance from cell phone towers to the (nearest)
 
 -   road
 -   railway
 -   coast
 -   border
--   capital.
+-   capital
+-   point of worship.
 
-To calculate the distances correctly, we first project the geometries to the *WGS 1984 Albers for Africa* equal area projection (ESRI:102022).
-Then, we use the `nngeo` [@nngeo] package, and its function `st_nn`.
+To calculate the distances correctly, I first project the geometries to the *WGS 1984 Albers for Africa* equal area projection (ESRI:102022).
+Then, I use the `nngeo` [@nngeo] package, and its function `st_nn`.
 For each cell phone tower, it calculates the distance to the nearest neighbour.
-Instead of receiving a matrix, we simply get a list with two vectors.
+Instead of receiving a matrix, I simply get a list with two vectors.
 The first vector includes the index for the nearest neighbour for each cell phone tower.
 The second vector includes the distance to this nearest neighbour.
-We do this for each variable of interest.
-When merging those distances with the Open Cell ID data, we transform them into kilometers.
+I do this for each variable of interest.
+When merging those distances with the Open Cell ID data, I transform them into kilometers.
 
-Additionally, we determine whether a cell phone tower is on an island.
-In this case, we still determine the distance to the coast; but we set the distance to the border to the mean value of the mainland distances.
-This is because we do not have the precise outline of the border in the ocean.
-We consequently add an island dummy to the analysis.
+Additionally, I determine whether a cell phone toIr is on an island.
+In this case, I still determine the distance to the coast; but I set the distance to the border to the mean value of the mainland distances.
+This is because I do not have the precise outline of the border in the ocean.
+I consequently add an island dummy to the analysis.
+
+Lastly, I add the lightning frequency for the area in which each antenna lies.
+I do this by simply intersecting the lightning frequency polygons with the antenna points.
 
 ```{r}
 #| label: calculate-dist-road
@@ -579,7 +625,7 @@ dists_capital <- sapply(nn_capital[[2]], "[", 1)
 ```{r}
 #| label: calculate-distance-pofw
 
-# calculate distance to nearest neighbor road
+# calculate distance to nearest point of worship
 if (here("output/nn_pofw.rds") |> file.exists()) {
   nn_pofw <- readRDS("output/nn_pofw.rds")
 } else {
@@ -593,15 +639,51 @@ if (here("output/nn_pofw.rds") |> file.exists()) {
 dists_pofw <- sapply(nn_pofw[[2]], "[", 1)
 
 ```
+```{r}
+#| label: get-lightning-frequency
+
+if (here("output/mobile_lightning.rds") |> file.exists()) {
+  mobile_lightning <- readRDS("output/mobile_lightning.rds")
+} else {
+  lightning_overlaps <- st_intersects(open_cell,
+                                      lightning)
+  
+  # check that all have an overlap
+  assertthat::assert_that(all(lightning_overlaps %>% lengths > 1))
+
+  # prepare lightning index and data frame
+  lightning_index <- sapply(lightning_overlaps, `[[`, 1)
+
+  lightning_wo_geometry <- lightning |> 
+    as.data.frame() |> 
+    select(-geometry)
+
+  # merge
+  mobile_lightning <- open_cell |> 
+    cbind(lightning_wo_geometry[lightning_index,])
+  
+  # check that all antennas have a lightning value
+  assertthat::assert_that(all(
+    !is.na(mobile_lightning$lightnings_mean_2014)
+    ))
+  
+  saveRDS(mobile_lightning,
+          "output/mobile_lightning.rds")
+}
+```
 
 
 ```{r}
 #| label: merge-dist-w-opencell
 # merge into open_cell data frame
-open_cell_w_distances <- open_cell |> 
+open_cell_w_distances <- mobile_lightning |> 
   mutate(state_id = state |> as.factor() |> as.integer()) |> 
+  rename(lightning = lightnings_mean_2014) |> 
+  # prettify labels
   mutate(state = labelled(state, 
-                          label = "State")) |> 
+                          label = "State"),
+         lightning = labelled(lightning,
+                              label = "Mean lightning frequency (2014)")) |> 
   mutate(dist_road_km = labelled(dists_roads / 1000, 
                                  label = "Distance to road (km)"),
          dist_train_km = labelled(dists_trains / 1000, 
@@ -633,19 +715,17 @@ saveRDS(open_cell_w_distances,
 #| label: tbl-summary-vars
 #| tbl-cap: Distance summaries
 
-selected_cols <- c("dist_road_km",
-                   "dist_train_km",
-                   "dist_border_km",
-                   "dist_coast_km",
-                   "dist_capital_km",
-                   "dist_pofw_km",
-                   "on_island")
+selected_cols <- open_cell_w_distances |>
+  as.data.frame() |>  # take out geometry
+  select(starts_with(c("dist_",
+                       "on_",
+                       "lightning"))) |>
+  names()
 
 # prepare histogram sparklines
 tmp_list <- open_cell_w_distances |> 
-  select(all_of(selected_cols)) |>
   as.data.frame() |> 
-  select(-geometry) |> 
+  select(all_of(selected_cols)) |>
   lapply(na.omit) |> 
   lapply(scale)
 
@@ -669,17 +749,17 @@ datasummary(formula = as.formula(formula_summary),
 
 # Regression results
 
-In the next step, we want to analyze what determines the timing of antenna construction.
-We do this separately for each technology: GSM, UMTS and LTE.
-We use the `fixest` package [@fixest] to run regressions with the amassed data set.
-We then use the `modelsummary` [@modelsummary] package to show the regression output.
+In the next step, I want to analyze what determines the timing of antenna construction.
+I do this separately for each technology: GSM, UMTS and LTE.
+I use the `fixest` package [@fixest] to run regressions with the amassed data set.
+I then use the `modelsummary` [@modelsummary] package to show the regression output.
 
-We run the following specifications:
+I run the following specifications:
 
 (1) baseline OLS
-(2) OLS with fixed effects (FE-OLS) on state-level
-(3) FE-OLS with state-level clustered standard errors
-(4) FE-OLS with heteroskedasticity-robust standard errors (White correction)
+(2) OLS with fixed effects (FE-OLS) on state-level and state-level clustered standard errors
+(4) (3) with heteroskedasticity-robust standard errors (White correction)
+(3) FE-OLS on raster-id level and with raster-level clustered standard errors (excluding the lightning variable, since it is colinear with the raster-id)
 (5) FE-OLS with Conley standard errors
 
 ## GSM
@@ -687,10 +767,7 @@ We run the following specifications:
 ```{r}
 #| label: run-regressions
 
-formula <- reformulate(open_cell_w_distances |>
-                         as.data.frame() |>  # take out geometry
-                         select(starts_with(c("dist_","on_"))) |> # select all distances
-                         names(),
+formula <- reformulate(selected_cols,
                        "created_year")
 
 
