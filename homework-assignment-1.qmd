@@ -11,18 +11,20 @@ format:
           % für Alignment bei Kommastelle
           \usepackage{booktabs}
           \usepackage{siunitx}
-          \sisetup{group-separator       = {,}, % default: \, ("thinspace")
-                  group-minimum-digits  = 3,   % default: 5
-                  input-decimal-markers = {.}} % default: "{.,}"
           % alle Tabellen kleiner setzen
           \usepackage{etoolbox}
           \AtBeginEnvironment{longtable}{\footnotesize}
           \AtBeginEnvironment{tabular}{\footnotesize}
-
+          \sisetup{group-separator       = {,}, % default: \, ("thinspace")
+                  group-minimum-digits  = 3,   % default: 5
+                  input-decimal-markers = {.}} % default: "{.,}"
 execute:
   warning: false
   echo: false
 bibliography: references.bib
+editor: 
+  markdown: 
+    wrap: sentence
 ---
 
 {{< pagebreak >}}
@@ -30,8 +32,16 @@ bibliography: references.bib
 In this report, we're having a look at cell phone towers in Tanzania, and estimate when they are built.
 
 ```{r}
-#| label: load-packages
+#| label: install-packages
 
+install.packages("renv")
+renv::hydrate()
+install.packages("remotes")
+remotes::install_github("ropensci/rnaturalearthhires")
+```
+
+```{r}
+#| label: load-packages
 library(here)
 library(archive)
 library(sf)
@@ -46,9 +56,9 @@ library(modelsummary)
 library(kableExtra)
 library(labelled)
 library(fixest)
-library(fwildclusterboot)
 
 library(showtext)
+font_add_google("Open Sans")
 showtext_auto()
 
 
@@ -393,10 +403,48 @@ basemap +
 
 ```
 
-## OSM data
+## Point of worship
 
-These are still missing.
-We still need to download some.
+Points of worship are any infrastructure where people worship -- e.g. mosques or churches.
+For the point of worship, I use data from OSM.
+I download it through the `osmdata` R package [@osmdata].
+While I use Tanzania's bounding box to download data, I later intersect it with Tanzania's shape to only retain points of worship within the country borders.
+The dataset provides point, line and polygon features.
+I only use point features, since these are the most frequent.
+
+```{r}
+#| label: load-pofw
+pofw <- 
+  getbb("Tanzania", featuretype = "country") |> 
+  opq(timeout = 100) |> 
+  add_osm_feature(key = "amenity",
+                  value = "place_of_worship") |> 
+  osmdata_sf() %>%
+  # filter out point layer
+  `[[`(4) |> 
+  # intersect with tanzania to only get Tanzanian pofw
+  st_transform(crs = crs_africa) |> 
+  st_intersection(tanzania_whole)
+```
+
+```{r}
+#| label: fig-pofw
+#| fig-cap: Points of worship
+
+basemap +
+  geom_sf(data = pofw,
+          alpha = .5) +
+  coord_sf(xlim = c(bounds$xlim, bounds$xmax),
+           ylim = c(bounds$ylim, bounds$ymax),
+           crs = crs_africa) +
+  labs(caption = "Data: Open Street Maps")
+
+```
+
+@fig-pofw shows the points of worship within Tanzania.
+Little surprisingly, a similar image as with the other variables emerges: the points of worship are in the same areas as cities, i.e. where people live.
+However, these data are more detailed and may show city centers, or areas where there is still room for building new infrastructure.
+They also show areas where the local population has enough income to build points of worship.
 
 ## Calculating distances
 
@@ -443,7 +491,7 @@ dists_roads <- sapply(nn_paved_roads[[2]], "[", 1)
 ```{r}
 #| label: calculate-dist-train
 
-# calculate distance to nearest neighbor road
+# calculate distance to nearest neighbor railway
 if (here("output/nn_trains.rds") |> file.exists()) {
   nn_trains <- readRDS("output/nn_trains.rds")
 } else {
@@ -461,7 +509,7 @@ dists_trains <- sapply(nn_trains[[2]], "[", 1)
 ```{r}
 #| label: calculate-dist-coast
 
-# calculate distance to nearest neighbor road
+# calculate distance to coast
 if (here("output/nn_coast.rds") |> file.exists()) {
   nn_coast <- readRDS("output/nn_coast.rds")
 } else {
@@ -479,7 +527,7 @@ dists_coast <- sapply(nn_coast[[2]], "[", 1)
 ```{r}
 #| label: calculate-distance-borders
 
-# calculate distance to nearest neighbor road
+# calculate distance to border
 if (here("output/nn_border.rds") |> file.exists()) {
   nn_border <- readRDS("output/nn_border.rds")
 } else {
@@ -492,6 +540,7 @@ if (here("output/nn_border.rds") |> file.exists()) {
 # extract distances
 dists_border <- sapply(nn_border[[2]], "[", 1)
 ```
+
 ```{r}
 #| label: check-if-on-island
 
@@ -508,11 +557,10 @@ is_on_island <- on_island %>% lengths > 0
 
 ```
 
-
 ```{r}
 #| label: calculate-distance-capital
 
-# calculate distance to nearest neighbor road
+# calculate distance to capital
 if (here("output/nn_capital.rds") |> file.exists()) {
   nn_capital <- readRDS("output/nn_capital.rds")
 } else {
@@ -527,6 +575,25 @@ if (here("output/nn_capital.rds") |> file.exists()) {
 dists_capital <- sapply(nn_capital[[2]], "[", 1)
 
 ```
+
+```{r}
+#| label: calculate-distance-pofw
+
+# calculate distance to nearest neighbor road
+if (here("output/nn_pofw.rds") |> file.exists()) {
+  nn_pofw <- readRDS("output/nn_pofw.rds")
+} else {
+  nn_pofw <- st_nn(open_cell,
+                   pofw,
+                   returnDist = TRUE)
+  saveRDS(nn_pofw,
+          "output/nn_pofw.rds")
+}
+# extract distances
+dists_pofw <- sapply(nn_pofw[[2]], "[", 1)
+
+```
+
 
 ```{r}
 #| label: merge-dist-w-opencell
@@ -546,7 +613,9 @@ open_cell_w_distances <- open_cell |>
          on_island = labelled(is_on_island |> as.integer(),
                               label = "Island position"),
          dist_capital_km = labelled(dists_capital / 1000, 
-                                    label = "Distance to capital (km)")) |> 
+                                    label = "Distance to capital (km)"),
+         dist_pofw_km = labelled(dists_pofw / 1000,
+                                 label = "Distance to point \nof worship (km)")) |> 
   # account for islands
   mutate(dist_border_km = ifelse(is_on_island, NA, dist_border_km)) 
 
@@ -569,6 +638,7 @@ selected_cols <- c("dist_road_km",
                    "dist_border_km",
                    "dist_coast_km",
                    "dist_capital_km",
+                   "dist_pofw_km",
                    "on_island")
 
 # prepare histogram sparklines
