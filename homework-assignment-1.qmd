@@ -691,7 +691,8 @@ if (here("output/mobile_lightning.rds") |> file.exists()) {
 # merge into open_cell data frame
 open_cell_w_distances <- mobile_lightning |> 
   mutate(state_id = state |> as.factor() |> as.integer()) |> 
-  rename(lightning = lightnings_mean_2014) |> 
+  rename(lightning = lightnings_mean_2014,
+         raster = raster_id) |> 
   # prettify labels
   mutate(state = labelled(state, 
                           label = "State"),

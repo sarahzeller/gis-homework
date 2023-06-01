@@ -1,6 +1,6 @@
 run_regressions <- function(data, formula) {
   # check there's a state variable
-  assertthat::assert_that(all(c("state","raster_id") %in% names(data)),
+  assertthat::assert_that(all(c("state","raster") %in% names(data)),
                           msg = "The data frame needs to include a state and raster_id variable.")
   # check that there's a geometry column
   assertthat::assert_that("geometry" %in% names(data),
@@ -30,7 +30,7 @@ run_regressions <- function(data, formula) {
     data |> 
     feols(fml = formula,
           data = _,
-          fixef = "raster_id")
+          fixef = "raster")
   
   fe_hetero <-
     data |> 
