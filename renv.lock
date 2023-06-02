@@ -160,6 +160,16 @@
       ],
       "Hash": "e8a22846fff485f0be3770c2da758713"
     },
+    "assertthat": {
+      "Package": "assertthat",
+      "Version": "0.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "tools"
+      ],
+      "Hash": "50c838a310445e954bc13f26f26a6ecf"
+    },
     "backports": {
       "Package": "backports",
       "Version": "1.4.1",
@@ -550,19 +560,6 @@
         "vctrs"
       ],
       "Hash": "dea6970ff715ca541c387de363ff405e"
-    },
-    "dqrng": {
-      "Package": "dqrng",
-      "Version": "0.3.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Requirements": [
-        "BH",
-        "R",
-        "Rcpp",
-        "sitmo"
-      ],
-      "Hash": "3ce2af5ead3b01c518fd453c7fe5a51a"
     },
     "dreamerr": {
       "Package": "dreamerr",
@@ -1834,6 +1831,20 @@
       ],
       "Hash": "76c9e04c712a05848ae7a23d2f170a40"
     },
+    "remotes": {
+      "Package": "remotes",
+      "Version": "2.4.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "methods",
+        "stats",
+        "tools",
+        "utils"
+      ],
+      "Hash": "227045be9aee47e6dda9bb38ac870d67"
+    },
     "renv": {
       "Package": "renv",
       "Version": "0.17.3",
@@ -2121,16 +2132,28 @@
       ],
       "Hash": "0b835f43939178a3cac6712fbe8cc2e8"
     },
-    "sitmo": {
-      "Package": "sitmo",
-      "Version": "2.0.2",
+    "showtext": {
+      "Package": "showtext",
+      "Version": "0.9-6",
       "Source": "Repository",
       "Repository": "CRAN",
       "Requirements": [
-        "R",
-        "Rcpp"
+        "grDevices",
+        "showtextdb",
+        "sysfonts"
       ],
-      "Hash": "c956d93f6768a9789edbc13072b70c78"
+      "Hash": "c0fd332d248b195bbcb94a0dfda37b0d"
+    },
+    "showtextdb": {
+      "Package": "showtextdb",
+      "Version": "3.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "sysfonts",
+        "utils"
+      ],
+      "Hash": "c12e756cf947e58b0f2c2a520521a5a8"
     },
     "sp": {
       "Package": "sp",
@@ -2197,6 +2220,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "b227d13e29222b4574486cfcbde077fa"
+    },
+    "sysfonts": {
+      "Package": "sysfonts",
+      "Version": "0.8.8",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "7f4dac41a3e348ae12832167e6beb875"
     },
     "systemfonts": {
       "Package": "systemfonts",
