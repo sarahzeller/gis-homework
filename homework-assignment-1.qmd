@@ -34,6 +34,8 @@ editor:
 {{< pagebreak >}}
 
 In this report, I'm having a look at cell phone towers in Tanzania, and estimate when they are built.
+I first describe the region and variables.
+I then show my regression and discuss them.
 
 ```{r}
 #| label: install-packages
@@ -192,6 +194,12 @@ basemap
 ```
 
 # Data
+
+In this section, I describe my data.
+All of it is geographically linked.
+First, I describe data for the variable of interest: the construction year of antennas in Tanzania.
+I then describe various points of interest and a meteorological phenomenon.
+I geographically link them to the antenna data.
 
 ## Antennas in Tanzania
 
@@ -463,7 +471,7 @@ They also show areas where the local population has enough income to build point
 
 Lightning frequency may influence whether an antenna is built: it makes it more difficult for technicians to set them up.
 This frequency has also been used as an instrument for mobile internet antennas in recent papers.
-I obtained the data from (NASA)[https://ghrc.nsstc.nasa.gov/lightning/] and already pre-cleaned the lightning dataset for another project, so here, I will use the cleaned dataset.
+I obtained the data from [NASA](https://ghrc.nsstc.nasa.gov/lightning/) and already pre-cleaned the lightning dataset for another project, so here, I will use the cleaned dataset.
 It contains the lightning frequency for 50x50 $km^2$ raster areas, as an average of all days in 2014.
 I intersect this dataset with Tanzania to retain only the areas of interest.
 The dataset also includes a raster ID for each raster.
@@ -478,8 +486,9 @@ if (!"lightning.rds" %in% (here("output") |> list.files())) {
     st_intersection(tanzania_whole$geometry)
   lightning |> 
     saveRDS(here("output/lightning.rds"))
-} else
+} else {
   lightning <- here("output/lightning.rds") |> readRDS()
+}
 ```
 
 ```{r}
@@ -494,7 +503,6 @@ basemap +
   labs(caption = "Data: NASA",
        fill = "Average lightning \nfrequency (2014)")
 ```
-
 
 ## Calculating distances
 
@@ -527,7 +535,6 @@ I do this by simply intersecting the lightning frequency polygons with the anten
 @tbl-summary-vars shows the descriptive statistics for these variables.
 We can see that all variables have the same number of observations, implying that we have all variables for all antennas.
 For all variables, there is quite a range, and most are left-skewed.
-
 
 ```{r}
 #| label: calculate-dist-road
@@ -652,6 +659,7 @@ if (here("output/nn_pofw.rds") |> file.exists()) {
 dists_pofw <- sapply(nn_pofw[[2]], "[", 1)
 
 ```
+
 ```{r}
 #| label: get-lightning-frequency
 
@@ -684,7 +692,6 @@ if (here("output/mobile_lightning.rds") |> file.exists()) {
           "output/mobile_lightning.rds")
 }
 ```
-
 
 ```{r}
 #| label: merge-dist-w-opencell
@@ -772,12 +779,10 @@ I run the following specifications:
 
 (1) baseline OLS
 (2) OLS with fixed effects (FE-OLS) on state-level and state-level clustered standard errors
-(3) (2) with heteroskedasticity-robust standard errors (White correction)
+(3) 
+    (2) with heteroskedasticity-robust standard errors (White correction)
 (4) FE-OLS on raster-id level and with raster-level clustered standard errors (excluding the lightning variable, since it is colinear with the raster-id)
 (5) FE-OLS with Conley standard errors
-
-
-
 
 ```{r}
 #| label: run-regressions
@@ -799,11 +804,13 @@ lte_list <- open_cell_w_distances |>
   run_regressions(formula = formula)
 
 ```
+
 ## GSM
+
 @tbl-summary-gsm shows the regression results for the oldest technology: GSM.
 Overall, the explanatory power of the models is modest ($R^2 \approx 0.2$).
 However, it does increase when including FE; and more when the states are controlled for than if the raster IDs are controlled for.
-The only variable that is robust to all specifications is the distance to the next point of worship. 
+The only variable that is robust to all specifications is the distance to the next point of worship.
 If it increases by $1km$, the building point of time for an antenna increases by $365 * 0.15 \approx 55$ days.
 The mean lightning frequency is also mostly robust, with a large positive and highly significant effect.
 If the mean lightning frequency increases from 0 to the maximum lightning frequency measured (0.00029), building an antenna is pushed back by approximately 9 months.
@@ -836,12 +843,13 @@ show_regressions(umts_list)
 ```
 
 ## LTE
+
 @tbl-summary-lte shows the regression results for the most recent antennas with LTE technology.
 Here, the results differ from the other two technologies.
 Firstly, the explanatory power is much higher ($R^2 \approx 0.5$).
 Also, the FE do not add much explanatory power.
 Interestingly, the distance to the next point of worship is not significant anymore.
-Instead, the distance to railways and to the borders becomes more important: while antennas closer to railways are built later, they are built sooner when they are closer to the border.
+Instead, the distance to railways and to the borders becomes more important: while antennas further from railways are built later, they are built sooner when they are further from the border.
 
 Again, the mean lightning frequency in 2014 is significant and robust, but the effect is less pronounced than with the other two technologies.
 
@@ -861,11 +869,14 @@ This is little surprising, since it is used as an instrument in literature.
 
 It appears that the predictors vary from the old technology (GSM/2G and UMTS/3G) to the new (LTE/3G): the most important distance predictor changes from point of worship to railway.
 
-One interpretation is that with the older antennas, the focus was on reaching as many people as possible. 
-Where there are points of worship, there are more people.
+One interpretation is that with the older antennas, the focus was on reaching as many people as possible.
+Where there are points of worship, there are more people; so it makes sense that antennas are built later the more they are removed from points of worship.
 In more recent years, maybe more areas were already covered, so areas which are less densely populated may have been covered as well.
 This would explain why distance to railway is important: the closer an antenna point is to the railway, the sooner the antenna will be built.
-This could be because in less densely populated areas, already existing infrastructure, i.e. railways, are used heavily as a backbone for the new infrastructure, i.e. antennas.
+This could be because in less densely populated areas, already existing infrastructure, i.e. railways, is used heavily as a backbone for the new infrastructure, i.e. antennas.
+
+Also, the border becomes more robust with the newest technology.
+This may be because the government may focus on its own population first; if the antenna is closer to the border, neighboring countries are also covered -- with inhabitants who cannot vote for them.
 
 {{< pagebreak >}}
 
