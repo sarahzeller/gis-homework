@@ -312,8 +312,7 @@ if(!(here("output/tri") |> exists())) {
 tri <- here("output/tri/Ruggedness_OneKilometerData/ruggedness1K.tif") |> 
   raster::raster()
 tri_tanzania <- tri |> 
-  raster::crop(tanzania_whole)
-
+  raster::crop(tanzania_whole |> st_transform("ESRI:54010"))
 ```
 
 ```{r}
