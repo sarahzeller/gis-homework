@@ -257,15 +257,19 @@ I access nighttime lights from the file uploaded in OPAL.
 ```{r}
 #| label: load-nightlights
 
-nightlights <- here("input/DN_NTL_2021.tif") |> 
-  raster::raster() |> 
-  crop(tanzania_whole)
-
-nightlights_sf <- nightlights |> 
-  rasterToPolygons(dissolve = FALSE, na.rm = TRUE)
-
-saveRDS(nightlights_sf,
-        here("output/nightlights_sf.rds"))
+if (!(here("output/nightlights_sf.rds") |> exists())) {
+  nightlights <- here("input/DN_NTL_2021.tif") |> 
+    raster::raster() |> 
+    crop(tanzania_whole)
+  
+  nightlights_sf <- nightlights |>
+    rasterToPolygons(dissolve = FALSE, na.rm = TRUE)
+  
+  saveRDS(nightlights_sf,
+          here("output/nightlights_sf.rds"))
+} else {
+  nightlights_sf <- here("output/nightlights_sf.rds") |> readRDS()
+}
 
 nightlights_terra <- here("input/DN_NTL_2021.tif") |> 
   terra::rast() |> 
@@ -304,15 +308,24 @@ Since the download link changes every time I added the downloaded folder to the 
 
 ```{r}
 #| label: load-tri
+
+# extract zip
 if(!(here("output/tri") |> exists())) {
   archive_extract(here("input/dataverse_files.zip"),
                 here("output/tri"))
 }
 
-tri <- here("output/tri/Ruggedness_OneKilometerData/ruggedness1K.tif") |> 
-  raster::raster()
-tri_tanzania <- tri |> 
-  raster::crop(tanzania_whole |> st_transform("ESRI:54010"))
+# crop raster to Tanzania
+here("output/tri/Ruggedness_OneKilometerData/ruggedness1K.tif") |> 
+  raster::raster() |> 
+  raster::crop(tanzania_whole |> st_transform("ESRI:54010")) |> 
+    raster::writeRaster(here("output/tri_tanzania.tif"))
+
+# read in
+tri <- here("output/tri_tanzania.tif") |> 
+  terra::rast() |> 
+  terra::project("epsg:4326")
+
 ```
 
 ```{r}
@@ -322,8 +335,39 @@ tri_tanzania <- tri |>
 tri_zonal <- zonal(tri, 
                    tanzania_vect, 
                    fun = "mean",
-                   na.rm = TRUE)
+                   na.rm = TRUE)  |> 
+  cbind(tanzania |> dplyr::select(name)) |> 
+  st_as_sf()
+
+basemap + 
+  geom_sf(data = tri_zonal,
+          aes(fill = tri_tanzania)) +
+  labs(fill = "Terrain Ruggedness Index",
+       caption = "Data: Harvard Dataverse")
+  
 ```
+
+## Land cover
+
+```{r}
+#| load-land-cover
+
+# crop raster to Tanzania
+if (! (here("output/landcover_tanzania.tif") |> exists())) {
+  here("output/tri/LandCover_OneKilometerData/LANDCOVER1k.tif") |>
+    raster::raster() |> 
+    raster::crop(tanzania_whole |> st_transform("ESRI:54010")) |> 
+    raster::writeRaster(here("output/landcover_tanzania.tif"), overwrite = TRUE)
+}
+
+# read in
+landcover <- here("output/landcover_tanzania.tif") |> 
+  terra::rast() |> 
+  terra::project("epsg:4326")
+
+```
+
+
 ## Elevation
 
 Elevation is obtained from NASA and downloaded through AppEEARS.
@@ -340,6 +384,55 @@ elevation <- here("output/elevation/gmted2010.shp") |> raster()
 ```
 
 
-## Forestation
+## Global Human Settlement Layer (GHSL)
+
+The data for the Global Human Settlement Layer come from the European Commission.
+I download them on a 250m grid with data from 2014.
+
+```{r}
+#| label: download-ghsl
+
+if (! (here("output/ghsl.tif") |> exists())) {
+  # download
+  download.file("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_LDSMT_GLOBE_R2015B/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250/V1-0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.zip",
+              destfile = here("output/ghsl.zip"))
+  # extract
+  archive_extract(here("output/ghsl.zip"),
+                  here("output/ghsl"))
+  # crop and save
+  here("output/ghsl/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.tif") |> 
+    raster::raster() |> 
+    raster::crop(tanzania_whole |> st_transform("ESRI:54009")) |> 
+    raster::writeRaster(here("output/ghsl.tif"))
+}
+```
+
+```{r}
+#| label: load-ghsl
+
+ghsl <- here("output/ghsl.tif") |> 
+  terra::rast() |> 
+  terra::project("epsg:4326")
+```
+
+
+```{r}
+#| label: fig-zonal-ghsl
+#| fig-cap: Zonal statistics for GHSL
+
+ghsl_zonal <- ghsl |> 
+  zonal(tanzania_vect, fun = "mean", na.rm = TRUE) |> 
+  cbind(tanzania |> dplyr::select(name)) |> 
+  st_as_sf()
+
+basemap +
+  geom_sf(data = ghsl_zonal,
+          aes(fill = log(ghsl))) +
+  labs(fill = "log Global Human \nSettlement Layer",
+       caption = "Data: European Commission")
+
+```
+
+
 
 
