@@ -182,39 +182,79 @@ basemap <-
 basemap
 ```
 
-# Data
+# Data sources
 
-## Lightnings
 
-I use the lightning data I used last time as a baseline grid.
-Originally, it was a raster file, so this approach seems justified.
+## Nighttime lights
+
+I access nighttime lights from the file uploaded in OPAL.
 
 ```{r}
-#| label: load-lightning
-here("input/lightnings_2014.rds") |> readRDS() |> 
-  # only retain rasters for Tanzania
-  st_intersection(tanzania_whole |> dplyr::select(geometry)) |> 
-  dplyr::select(lightnings_mean_2014) |> 
-  stars::st_rasterize() |> 
-  write_stars(here("output/lightnings_tanzania.tif"))
+#| label: load-nightlights
 
-lightning <- here("output/lightnings_tanzania.tif") |> 
-  terra::rast()
+if (!(here("output/nightlights_sf.rds") |> exists())) {
+  nightlights <- here("input/DN_NTL_2021.tif") |> 
+    raster::raster() |> 
+    crop(tanzania_whole) |> 
+    mask(tanzania_whole)
+  
+  nightlights_sf <- nightlights |>
+    # as('SpatialPolygonsDataFrame') |> 
+    rasterToPolygons(dissolve = FALSE, na.rm = TRUE) |> 
+    st_as_sf()
+  
+  saveRDS(nightlights_sf,
+          here("output/nightlights_sf.rds"))
+  st_write(nightlights_sf,
+           here("output/nightlights_sf.shp")) |> try()
+} else {
+  nightlights_sf <- here("output/nightlights_sf.rds") |> readRDS()
+}
+
+nightlights_terra <- here("input/DN_NTL_2021.tif") |> 
+  terra::rast() |> 
+  # crop to extent
+  crop(tanzania_whole) |> 
+  # clip exact borders
+  mask(tanzania_whole)
+
+nightlights_vect <- here("output/nightlights_sf.shp") |> terra::vect()
+
 ```
 
 ```{r}
-#| label: fig-lightning
-#| fig-cap: Lightning frequencies in Tanzania
+#| label: fig-nightlights-zonal
+#| fig-cap: 
+#|   - Nightlights (zonal)
+#|   - Nightlights
+
+nightlights_zonal <- zonal(nightlights_terra, tanzania_vect, fun = "mean", na.rm = TRUE) |> 
+  cbind(tanzania |> dplyr::select(name)) |> 
+  st_as_sf()
+
+basemap + 
+  geom_sf(data = nightlights_zonal,
+          aes(fill = log(DN_NTL_2021))) +
+  labs(fill = "Log night time lights")
 
 basemap +
-  geom_sf(data = lightning,
-          aes(fill = lightnings_mean_2014)) +
-  labs(fill = "Average lightnings in 2014")
+  geom_raster(data = nightlights_terra |> as.data.frame(xy = TRUE),
+              aes(x = x,
+                  y = y,
+                  fill = DN_NTL_2021))
 
 ```
+```{r}
+#| label nightlight-intersection
+
+nightlight_intersection <- terra::intersect(nightlights, open_cell)
+```
+
 
 
 ## Mobile antennas
+
+The presence of a mobile antenna is what we want to predict.
 
 ```{r}
 #| label: load-cellid
@@ -250,56 +290,38 @@ basemap +
 
 
 
-## Nighttime lights
+## Lightnings
 
-I access nighttime lights from the file uploaded in OPAL.
+I include the lightning data I used last time.
+Originally, it was a raster file, so this approach seems justified.
 
 ```{r}
-#| label: load-nightlights
+#| label: load-lightning
+here("input/lightnings_2014.rds") |> readRDS() |> 
+  # only retain rasters for Tanzania
+  st_intersection(tanzania_whole |> dplyr::select(geometry)) |> 
+  dplyr::select(lightnings_mean_2014) |> 
+  stars::st_rasterize() |> 
+  write_stars(here("output/lightnings_tanzania.tif"))
 
-if (!(here("output/nightlights_sf.rds") |> exists())) {
-  nightlights <- here("input/DN_NTL_2021.tif") |> 
-    raster::raster() |> 
-    crop(tanzania_whole)
-  
-  nightlights_sf <- nightlights |>
-    rasterToPolygons(dissolve = FALSE, na.rm = TRUE)
-  
-  saveRDS(nightlights_sf,
-          here("output/nightlights_sf.rds"))
-} else {
-  nightlights_sf <- here("output/nightlights_sf.rds") |> readRDS()
-}
-
-nightlights_terra <- here("input/DN_NTL_2021.tif") |> 
+lightning <- here("output/lightnings_tanzania.tif") |> 
   terra::rast() |> 
-  crop(tanzania_whole)
-
+  # clip exact borders
+  mask(tanzania_whole)
 ```
 
 ```{r}
-#| label: fig-nightlights-zonal
-#| fig-cap: Nightlights (zonal)
+#| label: fig-lightning
+#| fig-cap: Lightning frequencies in Tanzania
 
-nightlights_zonal <- zonal(nightlights_terra, tanzania_vect, fun = "mean", na.rm = TRUE) |> 
-  cbind(tanzania |> dplyr::select(name)) |> 
-  st_as_sf()
-
-basemap + 
-  geom_sf(data = nightlights_zonal,
-          aes(fill = log(DN_NTL_2021))) +
-  labs(fill = "Log night time lights")
+basemap +
+  geom_raster(data = lightning |> as.data.frame(xy = TRUE),
+          aes(fill = lightnings_tanzania,
+              x = x,
+              y = y)) +
+  labs(fill = "Average lightnings \nin 2014")
 
 ```
-```{r}
-#| label nightlight-intersection
-
-nightlight_intersection <- terra::intersect(nightlights, open_cell)
-```
-
-
-
-
 
 ## Terrain ruggedness (TRI)
 
@@ -319,7 +341,8 @@ if(!(here("output/tri") |> exists())) {
 here("output/tri/Ruggedness_OneKilometerData/ruggedness1K.tif") |> 
   raster::raster() |> 
   raster::crop(tanzania_whole |> st_transform("ESRI:54010")) |> 
-    raster::writeRaster(here("output/tri_tanzania.tif"))
+  mask(tanzania_whole |> st_transform("ESRI:54010")) |> 
+    raster::writeRaster(here("output/tri_tanzania.tif"), overwrite = TRUE)
 
 # read in
 tri <- here("output/tri_tanzania.tif") |> 
@@ -330,7 +353,9 @@ tri <- here("output/tri_tanzania.tif") |>
 
 ```{r}
 #| label: fig-zonal-tri
-#| fig-cap: TRI for Tanzanian states
+#| fig-cap: 
+#|    - TRI for Tanzanian states
+#|    - TRI
 
 tri_zonal <- zonal(tri, 
                    tanzania_vect, 
@@ -342,12 +367,20 @@ tri_zonal <- zonal(tri,
 basemap + 
   geom_sf(data = tri_zonal,
           aes(fill = tri_tanzania)) +
-  labs(fill = "Terrain Ruggedness Index",
+  labs(fill = "Terrain Ruggedness \nIndex",
+       caption = "Data: Harvard Dataverse")
+
+basemap +
+  geom_raster(data = tri |> as.data.frame(xy = TRUE),
+              aes(x = x,
+                  y = y,
+                  fill = tri_tanzania)) +
+  labs(fill = "Terrain Ruggedness \nIndex",
        caption = "Data: Harvard Dataverse")
   
 ```
 
-## Land cover
+#### Land cover
 
 ```{r}
 #| load-land-cover
@@ -367,21 +400,6 @@ landcover <- here("output/landcover_tanzania.tif") |>
 
 ```
 
-
-## Elevation
-
-Elevation is obtained from NASA and downloaded through AppEEARS.
-I uploaded a shape file of Tanzania to set the limits. 
-I selected the SRTM Elevation (DEM), with gridcells that are about 90m.
-The variable name is SRTMGL3_DEM.
-I download it as GeoTiff, in the WGS84 projection.
-
-
-```{r}
-#| label: load-elevation
-
-elevation <- here("output/elevation/gmted2010.shp") |> raster()
-```
 
 
 ## Global Human Settlement Layer (GHSL)
@@ -403,7 +421,8 @@ if (! (here("output/ghsl.tif") |> exists())) {
   here("output/ghsl/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.tif") |> 
     raster::raster() |> 
     raster::crop(tanzania_whole |> st_transform("ESRI:54009")) |> 
-    raster::writeRaster(here("output/ghsl.tif"))
+    raster::mask(tanzania_whole |> st_transform("ESRI:54009")) |> 
+    raster::writeRaster(here("output/ghsl.tif"), overwrite = TRUE)
 }
 ```
 
@@ -427,12 +446,125 @@ ghsl_zonal <- ghsl |>
 
 basemap +
   geom_sf(data = ghsl_zonal,
-          aes(fill = log(ghsl))) +
+          aes(fill = log(ghsl + 0.000001))) +
   labs(fill = "log Global Human \nSettlement Layer",
+       caption = "Data: European Commission")
+
+basemap + 
+  geom_raster(data = ghsl |> as.data.frame(xy = TRUE),
+              aes(x = x,
+                  y = y,
+                  fill = log(ghsl + 0.000001))) +
+    labs(fill = "log Global Human \nSettlement Layer",
        caption = "Data: European Commission")
 
 ```
 
 
+# Aggregating data on nighttime light grid level
 
+I use the nighttime light grid as a baseline grid.
+To calculate the overlap with the other data sets, I convert it from raster to an `sf` data frame.
+This makes it easier to calculate the overlap; additionally, for the regression, I need a data frame.
+
+To determine if there is an antenna on the grid, I intersect the antenna point layer with this baseline grid.
+I use the function `zonal` from the `terra` package to aggregate all other raster data on this level.
+I use the mean and ignore `NA`s.
+
+
+```{r}
+#| label: count-antennas-per-grid-cell
+
+ntl_antennas <- st_intersects(nightlights_sf, open_cell)
+
+ntl_antennas_vector <- ntl_antennas %>% lengths
+
+saveRDS(ntl_antennas,
+        here("output/ntl_antennas_sgbp.rds"))
+saveRDS(ntl_antennas_vector,
+        here("output/ntl_antennas_vector.rds"))
+
+```
+
+
+```{r}
+#| label: calculate-ntl-zonal-statistics
+
+ntl_lightnings_zonal <- zonal(lightning, 
+                              nightlights_vect, 
+                              fun = "mean", na.rm = TRUE)
+saveRDS(ntl_lightnings_zonal,
+        here("output/ntl_lightnings_zonal.rds"))
+
+```
+
+```{r}
+#| label: calculate-tri-zonal-statistics
+
+tri_lightnings_zonal <- zonal(tri,
+                              nightlights_vect,
+                              fun = "mean", na.rm = TRUE)
+
+saveRDS(tri_lightnings_zonal,
+        here("output/tri_lightnings_zonal.rds"))
+
+```
+
+```{r}
+#| label: calculate-ghsl-zonal-statistics
+
+ghsl_lightnings_zonal <- zonal(ghsl,
+                               nightlights_vect,
+                               fun = "mean", na.rm = TRUE)
+
+saveRDS(ghsl_lightnings_zonal,
+        here("output/ghsl_lightnings_zonal.rds"))
+
+```
+
+
+```{r}
+#| label: gather-statistics
+
+data <- nightlights_sf |> 
+  cbind(ntl_lightnings_zonal) |> 
+  cbind(tri_lightnings_zonal) |> 
+  cbind(ghsl_lightnings_zonal) |> 
+  mutate(number_antennas = ntl_antennas_vector) |> 
+  mutate(log_number_antennas = log(ntl_antennas_vector + 1e-10))
+```
+
+
+It's worth taking a moment to analyse the antennas per grid cell. 
+As @fig-raster-antennas shows, many grid cells have no antenna; a few have many, with a maximum of `r data$number_antennas |> max()`.
+However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained. 
+```{r}
+#| fig-raster-antennas
+#| fig-cap: Antennas per grid cell
+#| fig-scap: 
+#|    - Histogram
+#|    - Map
+
+
+number_antennas_raster <- data |> 
+  dplyr::select(log_number_antennas) |> 
+  st_rasterize() |> 
+  as.data.frame(xy = TRUE)
+
+ggplot() +
+  geom_histogram(data = data,
+            aes(x = number_antennas),
+            bins = 50) +
+  scale_y_continuous(trans = scales::pseudo_log_trans()) +
+  theme_minimal() +
+  labs(x = "Log number of antennas per grid cell")
+
+basemap +
+  geom_raster(data = number_antennas_raster,
+              aes(x = x,
+                  y = y,
+                  fill = log_number_antennas)) +
+  scale_fill_continuous(na.value = NA) +
+  labs(fill = "Log number of antennas")
+```
 
