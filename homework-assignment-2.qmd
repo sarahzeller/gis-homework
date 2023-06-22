@@ -257,6 +257,11 @@ nightlight_intersection <- terra::intersect(nightlights, open_cell)
 ## Mobile antennas
 
 The presence of a mobile antenna is what we want to predict.
+I remove all observations after 2022, since the data for 2023 are not complete yet.
+I split the data into three data sets:
+-   2G (GSM technology)
+-   3G (UMTS technology)
+-   4G (LTE technology)
 
 ```{r}
 #| label: load-cellid
@@ -277,6 +282,10 @@ open_cell <- opencellid_tanzania |>
   # add state and subset for only antennas within known states
   st_intersection(tanzania |> transmute(state = name)) 
 
+two_g <- open_cell |> filter(radio == "GSM")
+three_g <- open_cell |> filter(radio == "UMTS")
+four_g <- open_cell |> filter(radio == "LTE")
+
 ```
 
 ```{r}
@@ -287,6 +296,7 @@ basemap +
   geom_sf(data = open_cell |> st_jitter(),
           size = .8,
           alpha = .4) +
+  facet_wrap(~radio) +
   labs(caption = "Data: Open Cell ID")
 ```
 
@@ -661,5 +671,16 @@ basemap +
                   fill = log_number_antennas)) +
   scale_fill_continuous(na.value = NA) +
   labs(fill = "Log number of antennas")
+```
+
+# Regressions
+
+```{r}
+#| label: run-regression
+
+regression_2g <- feols(number_2g ~ DN_NTL_2021 + lightnings_tanzania + tri_tanzania + ghsl, data = data)
+regression_3g <- feols(number_3g ~ DN_NTL_2021 + lightnings_tanzania + tri_tanzania + ghsl, data = data)
+regression_4g <- feols(number_4g ~ DN_NTL_2021 + lightnings_tanzania + tri_tanzania + ghsl, data = data)
+
 ```
 
