@@ -569,6 +569,29 @@ if (! "ntl_ghsl_zonal.rds" %in% (here("output") |> list.files())) {
 }
 ```
 
+```{r}
+#| label: add-lat-lon
+
+if (! "centroids.rds" %in% (here("output") |> list.files())) {
+  
+# add an x and y coordinate variable for Conley SE
+centroids <- nightlights_sf |> 
+  dplyr::select(geometry) |> 
+  st_as_sf() |> 
+  st_centroid() |> 
+  st_coordinates() |> 
+  as.data.frame() |> 
+  rename(lat = X,
+         lon = Y)
+
+saveRDS(centroids,
+        here("output/centroids.rds"))
+} else {
+  centroids <- here("output/centroids.rds") |> readRDS()
+}
+
+```
+
 
 ```{r}
 #| label: gather-statistics
@@ -577,6 +600,7 @@ data <- nightlights_sf |>
   cbind(ntl_lightnings_zonal) |>
   cbind(ntl_tri_zonal) |>
   cbind(ntl_ghsl_zonal) |>
+  cbind(centroids) |> 
   # add pretty labels
   mutate(
     DN_NTL_2021 = labelled(DN_NTL_2021, label = "Mean night time lights"),
@@ -593,13 +617,12 @@ data <- nightlights_sf |>
   mutate(
     number_2g = labelled(ntl_two_g, label = "Number of 2G antennas"),
     number_3g = labelled(ntl_three_g, label = "Number of 3G antennas"),
-    number_4g = labelled(ntl_four_g, label = "Number of 4G antennas")
-  ) |> 
-  # add an x and y coordinate variable for Conley SE
-  mutate(
-    x = unlist(geometry)[1],
-    y = unlist(geometry)[6]
-  )
+    number_4g = labelled(ntl_four_g, label = "Number of 4G antennas"),
+    any_2g = labelled(as.integer(ntl_two_g > 0), label = "Any 2G antenna"),
+    any_3g = labelled(as.integer(ntl_three_g > 0), label = "Any 3G antenna"),
+    any_4g = labelled(as.integer(ntl_four_g > 0), label = "Any 4G antenna"),
+  ) 
+
 ```
 
 ```{r}
@@ -608,7 +631,7 @@ data <- nightlights_sf |>
 
 selected_cols <- data |> 
   as.data.frame() |> 
-  dplyr::select(-geometry, x, y) |> 
+  dplyr::select(-geometry, -lon, -lat) |> 
   names()
 
 # prepare histogram sparklines
@@ -636,7 +659,7 @@ datasummary(formula = as.formula(formula_summary),
       align = c("l", rep("r", 6), "c")) |> 
   column_spec(column = 8, image = spec_hist(tmp_list)) |> 
   pack_rows("Explanatory variables", 1, 4) |> 
-  pack_rows("Dependent variables", 5, 9)
+  pack_rows("Dependent variables", 5, 12)
 ```
 
 @tbl-one shows the summary statistics for the aggregated data set.
