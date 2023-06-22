@@ -44,10 +44,12 @@ I then show my regression and discuss them.
 #| warning: false
 #| eval: false
 
+if (!require("remotes")) install.packages("remotes", quiet = TRUE)
+if (!require("rnaturalearthhires")) {
+  remotes::install_github("ropensci/rnaturalearthhires")
+} 
 if (!require("renv")) install.packages("renv", quiet = TRUE)
 renv::hydrate()
-if (!require("remotes")) install.packages("remotes", quiet = TRUE)
-remotes::install_github("ropensci/rnaturalearthhires")
 ```
 
 ```{r}
@@ -192,7 +194,7 @@ I access nighttime lights from the file uploaded in OPAL.
 ```{r}
 #| label: load-nightlights
 
-if (!(here("output/nightlights_sf.rds") |> exists())) {
+if (! "nightlights_sf.rds" %in% (here("output") |> list.files())) {
   nightlights <- here("input/DN_NTL_2021.tif") |> 
     raster::raster() |> 
     crop(tanzania_whole) |> 
@@ -475,14 +477,36 @@ I use the mean and ignore `NA`s.
 ```{r}
 #| label: count-antennas-per-grid-cell
 
-ntl_antennas <- st_intersects(nightlights_sf, open_cell)
+if (!("ntl_antennas_vector.rds" %in% (here("output") |> list.files()))) {
+  ntl_antennas <- st_intersects(nightlights_sf, open_cell)
+  
+  ntl_antennas_vector <- ntl_antennas %>% lengths
+  
+  saveRDS(ntl_antennas,
+          here("output/ntl_antennas_sgbp.rds"))
+  saveRDS(ntl_antennas_vector,
+          here("output/ntl_antennas_vector.rds"))
+} else {
+  ntl_antennas_vector <-
+    here("output/ntl_antennas_vector.rds") |> readRDS()
+}
 
-ntl_antennas_vector <- ntl_antennas %>% lengths
+# per technology
+if (! all(c("ntl_two_g.rds", "ntl_three_g.rds", "ntl_four_g.rds") %in%
+          (here("output") |> list.files()))) {
+  
+ntl_two_g <- st_intersects(nightlights_sf, two_g) %>% lengths
+ntl_three_g <- st_intersects(nightlights_sf, three_g) %>% lengths
+ntl_four_g <- st_intersects(nightlights_sf, four_g) %>% lengths
 
-saveRDS(ntl_antennas,
-        here("output/ntl_antennas_sgbp.rds"))
-saveRDS(ntl_antennas_vector,
-        here("output/ntl_antennas_vector.rds"))
+saveRDS(ntl_two_g, here("output/ntl_two_g.rds"))
+saveRDS(ntl_three_g, here("output/ntl_three_g.rds"))
+saveRDS(ntl_four_g, here("output/ntl_four_g.rds"))
+} else {
+  ntl_two_g <- here("output/ntl_two_g.rds") |> readRDS()
+  ntl_three_g <- here("output/ntl_three_g.rds") |> readRDS()
+  ntl_four_g <- here("output/ntl_four_g.rds") |> readRDS()
+}
 
 ```
 
@@ -490,51 +514,122 @@ saveRDS(ntl_antennas_vector,
 ```{r}
 #| label: calculate-ntl-zonal-statistics
 
-ntl_lightnings_zonal <- zonal(lightning, 
-                              nightlights_vect, 
-                              fun = "mean", na.rm = TRUE)
-saveRDS(ntl_lightnings_zonal,
-        here("output/ntl_lightnings_zonal.rds"))
+if (! "ntl_lightnings_zonal.rds" %in% (here("output") |> list.files())) {
+  ntl_lightnings_zonal <- zonal(lightning,
+                                nightlights_vect,
+                                fun = "mean",
+                                na.rm = TRUE)
+  saveRDS(ntl_lightnings_zonal,
+          here("output/ntl_lightnings_zonal.rds"))
+} else {
+  ntl_lightnings_zonal <- here("output/ntl_lightnings_zonal.rds") |> readRDS()
+}
 
 ```
 
 ```{r}
 #| label: calculate-tri-zonal-statistics
 
-tri_lightnings_zonal <- zonal(tri,
-                              nightlights_vect,
-                              fun = "mean", na.rm = TRUE)
-
-saveRDS(tri_lightnings_zonal,
-        here("output/tri_lightnings_zonal.rds"))
-
+if (! "ntl_tri_zonal.rds" %in% (here("output") |> list.files())) {
+  ntl_tri_zonal <- zonal(tri,
+                                nightlights_vect,
+                                fun = "mean", na.rm = TRUE)
+  
+  saveRDS(ntl_tri_zonal,
+          here("output/ntl_tri_zonal.rds"))
+  
+} else {
+  ntl_tri_zonal <-
+    here("output/ntl_tri_zonal.rds") |> readRDS()
+}
 ```
 
 ```{r}
 #| label: calculate-ghsl-zonal-statistics
 
-ghsl_lightnings_zonal <- zonal(ghsl,
-                               nightlights_vect,
-                               fun = "mean", na.rm = TRUE)
-
-saveRDS(ghsl_lightnings_zonal,
-        here("output/ghsl_lightnings_zonal.rds"))
-
+if (! "ntl_ghsl_zonal.rds" %in% (here("output") |> list.files())) {
+  ntl_ghsl_zonal <- zonal(ghsl,
+                                 nightlights_vect,
+                                 fun = "mean", na.rm = TRUE)
+  
+  saveRDS(ntl_ghsl_zonal,
+          here("output/ntl_ghsl_zonal.rds"))
+} else {
+  ntl_ghsl_zonal <- here("output/ntl_ghsl_zonal.rds") |> readRDS()
+}
 ```
 
 
 ```{r}
 #| label: gather-statistics
 
-data <- nightlights_sf |> 
-  cbind(ntl_lightnings_zonal) |> 
-  cbind(tri_lightnings_zonal) |> 
-  cbind(ghsl_lightnings_zonal) |> 
-  mutate(number_antennas = ntl_antennas_vector) |> 
-  mutate(log_number_antennas = log(ntl_antennas_vector + 1e-10))
+data <- nightlights_sf |>
+  cbind(ntl_lightnings_zonal) |>
+  cbind(ntl_tri_zonal) |>
+  cbind(ntl_ghsl_zonal) |>
+  # add pretty labels
+  mutate(
+    DN_NTL_2021 = labelled(DN_NTL_2021, label = "Mean night time lights"),
+    lightnings_tanzania = labelled(lightnings_tanzania,   
+                                   label = "Mean number of lightnings"),
+    tri_tanzania = labelled(tri_tanzania, label = "Mean TRI"),
+    ghsl = labelled(ghsl, label = "Mean GHSL")
+  ) |>
+  # add antenna info
+  mutate(number_antennas = labelled(ntl_antennas_vector,
+                                    label = "Number of antennas")) |>
+  mutate(log_number_antennas = labelled(log(ntl_antennas_vector + 1e-10),
+                                        label = "Log number of antennas")) |>
+  mutate(
+    number_2g = labelled(ntl_two_g, label = "Number of 2G antennas"),
+    number_3g = labelled(ntl_three_g, label = "Number of 3G antennas"),
+    number_4g = labelled(ntl_four_g, label = "Number of 4G antennas")
+  ) |> 
+  # add an x and y coordinate variable for Conley SE
+  mutate(
+    x = unlist(geometry)[1],
+    y = unlist(geometry)[6]
+  )
 ```
 
+```{r}
+#| label: tbl-one
+#| tbl-cap: Summary statistics
 
+selected_cols <- data |> 
+  as.data.frame() |> 
+  dplyr::select(-geometry, x, y) |> 
+  names()
+
+# prepare histogram sparklines
+tmp_list <- data |> 
+  as.data.frame() |> 
+  dplyr::select(all_of(selected_cols)) |>
+  lapply(na.omit) |> 
+  lapply(scale)
+
+# formatting things
+emptycol <- function(x) " "
+f <- function(x) format(round(x, 2), big.mark=",")
+# formula
+formula_summary <- paste(
+  paste(paste0(selected_cols), collapse = "+"), 
+  '~ N + Mean + SD + Median + Min + Max + Heading("Histogram") * emptycol'
+  )
+
+datasummary(formula = as.formula(formula_summary),
+            data = data,
+            format = f,
+            output = "data.frame",
+            notes = "Unit of observation: Nighttime lights grid cell") |> 
+  kbl(booktabs = TRUE,
+      align = c("l", rep("r", 6), "c")) |> 
+  column_spec(column = 8, image = spec_hist(tmp_list)) |> 
+  pack_rows("Explanatory variables", 1, 4) |> 
+  pack_rows("Dependent variables", 5, 9)
+```
+
+@tbl-one shows the summary statistics for the aggregated data set.
 It's worth taking a moment to analyse the antennas per grid cell. 
 As @fig-raster-antennas shows, many grid cells have no antenna; a few have many, with a maximum of `r data$number_antennas |> max()`.
 However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained. 
