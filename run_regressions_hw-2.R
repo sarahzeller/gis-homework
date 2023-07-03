@@ -1,11 +1,11 @@
 run_regressions <- function(dep_var, 
                             indep_vars = explanatory_vals,
-                            data = data) {
+                            dataset = data) {
   # check there's a state variable
-  assertthat::assert_that(all(c("state") %in% names(data)),
-                          msg = "The data frame needs to include a state and raster_id variable.")
+  assertthat::assert_that(all(c("state_name") %in% names(data)),
+                          msg = "The data frame needs to include a state_name variable.")
   # check that there's a geometry column
-  assertthat::assert_that(c("x","y") %in% names(data),
+  assertthat::assert_that(all(c("lon", "lat") %in% names(dataset)),
                           msg = "The data frame needs to include geometry variables x and y.")
   
   assertthat::assert_that(all(is.character(dep_var), is.character(indep_vars)),
@@ -14,25 +14,25 @@ run_regressions <- function(dep_var,
   formula <- reformulate(indep_vars, dep_var)
   
   baseline <- 
-    data |> 
+    dataset |> 
     feols(fml = formula,
           data = _)
   
   fe_state <-
-    data |> 
+    dataset |>
     feols(fml = formula,
           data = _,
-          fixef = "state")
-  
+          fixef = "state_name")
+
   fe_hetero <-
-    data |> 
+    dataset |>
     feols(fml = formula,
           data = _,
-          fixef = "state",
+          fixef = "state_name",
           vcov = "hetero")
   
-  conley <- 
-    data |> 
+  conley <-
+    dataset |>
     feols(fml = formula,
           data = _,
           vcov = "conley")
