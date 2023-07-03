@@ -483,6 +483,36 @@ To determine if there is an antenna on the grid, I intersect the antenna point l
 I use the function `zonal` from the `terra` package to aggregate all other raster data on this level.
 I use the mean and ignore `NA`s.
 
+```{r}
+#| label: add-state-to-nightlights
+
+if (!"nightlights_sf_w_state.rds" %in% (here("output") |> list.files())) {
+  # intersect first
+  nightlights_state_intersection <- nightlights_sf |>  
+    st_intersects(tanzania |> dplyr::select(name))
+  
+  # figure out number of overlapping states, and pull out first
+  overlap_state_number <- nightlights_state_intersection %>% lengths()
+  overlap_first <- sapply(nightlights_state_intersection, first, default = NA)
+  
+  # determine the final state
+  nightlights_state <- data.frame(state = overlap_first,
+                           number_states = overlap_state_number) |> 
+    mutate(state_name = case_when(number_states == 0 ~ "none",
+                                  number_states == 1 ~ tanzania$name[state],
+                                  number_states > 1 ~ "multiple states")) |> 
+    mutate(state_name = labelled(state_name, label = "State name"))
+  
+  
+  saveRDS(nightlights_state,
+          here("output/nightlights_states.rds"))
+} else {
+  nightlights_state <-
+    here("output/nightlights_states.rds") |> readRDS()
+}
+
+```
+
 
 ```{r}
 #| label: count-antennas-per-grid-cell
@@ -597,6 +627,7 @@ saveRDS(centroids,
 #| label: gather-statistics
 
 data <- nightlights_sf |>
+  cbind(nightlights_state |> select(state_name)) |> 
   cbind(ntl_lightnings_zonal) |>
   cbind(ntl_tri_zonal) |>
   cbind(ntl_ghsl_zonal) |>
@@ -631,7 +662,7 @@ data <- nightlights_sf |>
 
 selected_cols <- data |> 
   as.data.frame() |> 
-  dplyr::select(-geometry, -lon, -lat) |> 
+  dplyr::select(-geometry, -lon, -lat, -state_name) |> 
   names()
 
 # prepare histogram sparklines
