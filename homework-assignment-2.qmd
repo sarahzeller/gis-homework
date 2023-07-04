@@ -186,10 +186,14 @@ basemap
 
 # Data sources
 
+In this section, I describe the data, including their sources, for both independent and dependent variables.
+I show how I derive the variables I later use in the regression.
 
 ## Nighttime lights
 
 I access nighttime lights from the file uploaded in OPAL.
+It shows the light intensity for each grid cell during night.
+The grid cells are approximately 1 $km^2$.
 
 ```{r}
 #| label: load-nightlights
@@ -224,11 +228,22 @@ nightlights_vect <- here("output/nightlights_sf.shp") |> terra::vect()
 
 ```
 
+I use this grid cell as the baseline and aggregate all other variables on this level.
+For this, I transform the raster data to a `sf` object, and then calculate zonal statistics for each of the grid cells.
+This leads to a huge data set, since I have `r nrow(nightlights_sf) |> format(big.mark = ",")` grid cells. However, I chose to go with such a detailed data set so that calculating the probability of any antenna within this grid cell makes some sense; if the grid cells are too large, we'd have to go for the number of antennas.
+
+In @fig-nightlights-zonal, I plot the data.
+I first show them aggregated on the state level: here, we can see that there are only to states with high light intensity, and a couple of rather dark ones, while the rest is in between.
+When disaggregating them to the grid level, we can see that the picture is actually more nuanced: there are some large cities which are really bright, a lot of areas with at least some lights, and other areas which are pitch-black.
+We would expect the antennas to be built where more people are, since more people can then use the new infrastructure.
+Thus, we'd expect a positive correlation between this variable and the number or probability of an antenna within a grid cell.
+
 ```{r}
 #| label: fig-nightlights-zonal
-#| fig-cap: 
-#|   - Nightlights (zonal)
-#|   - Nightlights
+#| fig-cap: Nightlights
+#| fig-subcap:
+#|   - per state
+#|   - per grid cell
 
 nightlights_zonal <- zonal(nightlights_terra, tanzania_vect, fun = "mean", na.rm = TRUE) |> 
   cbind(tanzania |> dplyr::select(name)) |> 
@@ -247,18 +262,24 @@ basemap +
 
 ```
 
-
-
-
 ## Mobile antennas
 
 The presence of a mobile antenna is what we want to predict.
 I remove all observations after 2022, since the data for 2023 are not complete yet.
-I split the data into three data sets:
+I then split the data into three data sets:
 
 -   2G (GSM technology)
 -   3G (UMTS technology)
 -   4G (LTE technology)
+
+This is because each technology goes with a different phase of installing the infrastructure.
+While 2G was the earliest infrastructure and thus shows where early priorities lie, 4G is the most advanced and can show where current technology hotspots are.
+Also, administrations may have changed, with different foci on which parts of the country to connect.
+
+@fig-antennas shows the distribution of the three different technologies.
+It seems like 2G is the most frequent one, which makes sense since it has been around the longest.
+The 3G antennas are not quite as frequent, but also seem to go along some major roads.
+For 4G technology, the antenna clusters seem to match the large cities which we can see in @fig-nightlights-zonal.
 
 ```{r}
 #| label: load-cellid
@@ -297,12 +318,17 @@ basemap +
   labs(caption = "Data: Open Cell ID")
 ```
 
-
-
 ## Lightnings
 
 I include the lightning data I used last time.
 Originally, it was a raster file, so this approach seems justified.
+The data shows the average number of lightnings in 2014.
+Lightnings may predict the probability or number of antennas in a raster cell because they make it more difficult to install antennas.
+However, they are not induced by humans and should not have an impact on GDP, which makes them a good instrument for antennas.
+We'd expect the coefficient to be negative, as more lightnings should make it more difficult to build antennas.
+
+@fig-lightning shows the distribution of lightnings around Tanzania.
+We can see some high-frequency clusters in the North and West, and some lower-frequency clusters toward the coast.
 
 ```{r}
 #| label: load-lightning
@@ -336,6 +362,17 @@ basemap +
 
 I download terrain ruggedness index (TRI) data from the [Harvard Dataverse](https://dataverse.harvard.edu/dataset.xhtml;jsessionid=f1ff7041fae2752fa64ab754bc0e?persistentId=doi%3A10.7910%2FDVN%2FWXUZBN&version=&q=&fileTypeGroupFacet=%22Document%22&fileAccess=&fileTag=&fileSortField=&fileSortOrder=#) [@carter].
 Since the download link changes every time I added the downloaded folder to the input folder.
+The resolution is similar to the nighttime lights.
+
+The TRI indicates how much the altitude changes from one grid cell to the next.
+If a grid cell is very high, but the surrounding cells are as well, the TRI will be low.
+Only if a grid cell is very high, but (some of) its surrounding cells are low, will the TRI be high.
+It is thus derived from the altitude, but not quite the same.
+We'd expect a more rugged terrain to impede antenna installation, so TRI should negatively impact the probability or number of antennas in a grid cell.
+
+@fig-zonal-tri shows the TRI distribution across Tanzania.
+We can see that the states are quite different when it comes to ruggedness, with low ruggedness towards the coast and higher towards the North and West.
+When considering the cell level, we can see that there are just a few cells with high ruggedness, which may indicate mountains (after all, the Kilimanjaro is in Tanzania).
 
 ```{r}
 #| label: load-tri
@@ -362,9 +399,10 @@ tri <- here("output/tri_tanzania.tif") |>
 
 ```{r}
 #| label: fig-zonal-tri
-#| fig-cap: 
-#|    - TRI for Tanzanian states
-#|    - TRI
+#| fig-cap: TRI
+#| fig-subcap:
+#|    - for Tanzanian states
+#|    - on grid level
 
 tri_zonal <- zonal(tri, 
                    tanzania_vect, 
@@ -393,6 +431,14 @@ basemap +
 
 The data for the Global Human Settlement Layer come from the European Commission.
 I download them on a 250m grid with data from 2014.
+This grid is more detailed than the baseline grid.
+The GHSL value is an estimation of how present humans are within a grid, either through settling or using the area for production.
+
+@fig-zonal-ghsl shows the distribution across Tanzania.
+I show the log value, since the distribution is very uneven.
+On the state level, we can see that this overlaps a lot with nighttime lights data: Dar es Salaam and Zanzibar-West have the hightest human presence.
+When we consider the grid-level, we can can once more see the local hotspots, and also see that most of Tanzania is not settled.
+Also, towards the North-East, there is a cluster with high settlement which did not appear in the nighttime lights data.
 
 ```{r}
 #| label: download-ghsl
@@ -421,10 +467,12 @@ ghsl <- here("output/ghsl.tif") |>
   terra::project("epsg:4326")
 ```
 
-
 ```{r}
 #| label: fig-zonal-ghsl
 #| fig-cap: Zonal statistics for GHSL
+#| fig-subcap: 
+#|    - per state
+#|    - per grid cell
 
 ghsl_zonal <- ghsl |> 
   zonal(tanzania_vect, fun = "mean", na.rm = TRUE) |> 
@@ -447,16 +495,26 @@ basemap +
 
 ```
 
-
 # Aggregating data on nighttime light grid level
 
 I use the nighttime light grid as a baseline grid.
 To calculate the overlap with the other data sets, I convert it from raster to an `sf` data frame.
 This makes it easier to calculate the overlap; additionally, for the regression, I need a data frame.
 
+To determine the state in which a grid cell lies, I use the `sf` methd `intersects`.
+From this, I can determine in most cases the one state in which this grid cell lies.
+In some cases, there are two or three states; I assign the value `multiple states` to these cases.
+In some cases, there is no state; then, I assign the value `none`.
+
 To determine if there is an antenna on the grid, I intersect the antenna point layer with this baseline grid.
-I use the function `zonal` from the `terra` package to aggregate all other raster data on this level.
+I use the function `zonal` from the `terra` package [@terra] to aggregate all other raster data on this level.
 I use the mean and ignore `NA`s.
+
+@tbl-one shows the summary statistics for the aggregated data set.
+We can see that relatively few values are missing, and only for lightnings and TRI. 
+This is probably because the raster layers do not align perfectly, and thus some of the finer-coarsed nighttime lights raster grid cells are in areas lightnings and TRI simply do not cover.
+We can also see thatt the distributions of all variables are quite left-skewed: many low values, and some high outliers.
+This is especially true for the number of antennas.
 
 ```{r}
 #| label: add-state-to-nightlights
@@ -487,7 +545,6 @@ if (!"nightlights_sf_w_state.rds" %in% (here("output") |> list.files())) {
 }
 
 ```
-
 
 ```{r}
 #| label: count-antennas-per-grid-cell
@@ -524,7 +581,6 @@ saveRDS(ntl_four_g, here("output/ntl_four_g.rds"))
 }
 
 ```
-
 
 ```{r}
 #| label: calculate-ntl-zonal-statistics
@@ -597,7 +653,6 @@ saveRDS(centroids,
 
 ```
 
-
 ```{r}
 #| label: gather-statistics
 
@@ -618,8 +673,6 @@ data <- nightlights_sf |>
   # add antenna info
   mutate(number_antennas = labelled(ntl_antennas_vector,
                                     label = "Number of antennas")) |>
-  mutate(log_number_antennas = labelled(log(ntl_antennas_vector + 1e-10),
-                                        label = "Log number of antennas")) |>
   mutate(
     number_2g = labelled(ntl_two_g, label = "Number of 2G antennas"),
     number_3g = labelled(ntl_three_g, label = "Number of 3G antennas"),
@@ -665,13 +718,13 @@ datasummary(formula = as.formula(formula_summary),
       align = c("l", rep("r", 6), "c")) |> 
   column_spec(column = 8, image = spec_hist(tmp_list)) |> 
   pack_rows("Explanatory variables", 1, 4) |> 
-  pack_rows("Dependent variables", 5, 12)
+  pack_rows("Dependent variables", 5, 11)
 ```
 
-@tbl-one shows the summary statistics for the aggregated data set.
-It's worth taking a moment to analyse the antennas per grid cell. 
+It's worth taking a moment to analyse the antennas per grid cell.
 As @fig-raster-antennas shows, many grid cells have no antenna; a few have many, with a maximum of `r data$number_antennas |> max()`.
-However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained. 
+However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained.
+
 ```{r}
 #| label: fig-raster-antennas
 #| fig-cap: "Antennas per grid cell"
@@ -703,26 +756,35 @@ basemap +
 
 # Regressions
 
+I use the data aggregated in previous steps to run regressions.
+With these, I want to estimate the impact of my explanatory variables on the probability/number of antennas in a grid cell. 
+
 In run seperate regressions for each technology.
-Within each technology, I use two different dependent variables: 
+Within each technology, I use two different dependent variables:
 
 -   any antenna in grid cell
 -   number of antennas per grid cell
 
 The first specification is due to the wording in the homework assignment; the second is because I noticed some cells with much larger values than 1.
+The independent variables are the variables I calculated in the previous section:
+
+-   mean night time lights
+-   mean number of lightnings
+-   mean TRI
+-   mean GHSL
 
 For each of these dependent variables, I run the following regressions:
 
-1.    *baseline:* a simple ordinary least squares regression (OLS) 
-2.    *fixed effects (FE)*: a simple OLS with FE on the state level, and accordingly clustered standard errors
-3.    *HAC standard errors:* as 2., but with standard errors accounting for heteroscedasticity.
+1.  *baseline:* a simple ordinary least squares regression (OLS)
+2.  *fixed effects (FE)*: a simple OLS with FE on the state level, and accordingly clustered standard errors
+3.  *HAC standard errors:* as 2., but with standard errors accounting for heteroscedasticity.
 
-I also considered using *Conley standard errors*. 
-However, the regressions took too long to run. 
-If of interest, it can however be run in the cells `run-regression-2g` to `run-regression-4g` by adding the following argument to the function `run_regressions`: `conley = TRUE`. 
+I also considered using *Conley standard errors*.
+However, the regressions took too long to run.
+If of interest, it can however be run in the cells `run-regression-2g` to `run-regression-4g` by adding the following argument to the function `run_regressions`: `conley = TRUE`.
 
 I decide against using an instrumental variables (IV) approach.
-This is because while lightning strikes are an instrument for mobile antennas, mobile antennas in this case are the dependent variable. 
+This is because while lightning strikes are an instrument for mobile antennas, mobile antennas in this case are the dependent variable.
 However, the IV approach is only used when there is an endogenous explanatory variable.
 Since this is not the case, and I do not know of any further endogeneity issues or how to solve them through IV, I do not employ an IV strategy.
 
@@ -735,13 +797,27 @@ explanatory_vals <- c("DN_NTL_2021",
                       "ghsl")
 ```
 
-
 ## 2G (GMS)
 
-In the first set of regressions, I consider 2G antennas, i.e. the earliest ones. 
-As seen in @fig-antennas, this type of antenna is the most frequent one. 
+In the first set of regressions, I consider 2G antennas, i.e. the earliest ones.
+As seen in @fig-antennas, this type of antenna is the most frequent one.
 With this type of antenna, we should be able to see how the government chooses spots for early and basic provision.
-@tbl-
+
+@tbl-regression-2g shows the regression results.
+We can see that the explanatory power is not terrible: $R^2$ lies is around 10--20%, even without fixed effects.
+Interestingly, adding fixed effects on the state level does not increase the explanatory power by a lot. 
+Presumably, the state borders do not tell us a lot about where antennas are built.
+
+Almost all coefficients are highly significant ($p < 0.001$).
+The only exception is the lighntings variable, where significance disappears when clustering standard errors by state and using FE on the same level.
+For almost all variables, the coefficients go in the expected direction: night lights and GHSL increase the number/probability of 2G antennas, lightnings decrease them.
+Only the TRI has an impact close to 0.
+This may be because the distribution is heavily left-skewed; in a future work, one could try logging the variable and considering the results again.
+
+When comparing the two panels -- any antenna vs. number of antennas -- we do not see differences in the significance or the signs, but only in the magnitude of the coefficients.
+This makes sense, since we are not talking about probabilities anymore, but about numbers. 
+In almost all cases, the coefficients quintuple.
+
 
 ```{r}
 #| label: run-regression-2g
@@ -762,8 +838,14 @@ list(
 
 ```
 
-
 ## 3G (UMTS)
+
+The results for the next technology are shown in @tbl-regressions-3g.
+They do not differ much from the results for 2G antennas.
+Coefficients have a similar significance and the signs are equal.
+Only the coefficient magnitude for the number of 3G antennas is larger than for 2G antennas.
+Apparently, more antennas are built now in those areas with high settlement, and even less in more difficult areas (i.e. with more lightnings).
+The barely noticeable impact of TRI continues.
 
 ```{r}
 #| label: run-regressions-3g
@@ -772,6 +854,7 @@ reg_bin_3g <- run_regressions("any_3g")
 reg_3g <- run_regressions("number_3g")
 
 ```
+
 ```{r}
 #| label: tbl-regressions-3g
 #| tbl-cap: Regression results for 3G antennas
@@ -783,13 +866,28 @@ list(
   show_regressions(regression_list = _)
 ```
 
-
 ## 4G (LTE)
+
+Lastly, I analyze 4G antennas. 
+This is the most recent technology.
+Interestingly, results change a bit compared to 2G and 3G.
+
+When clustering standard errors at state level and applying state FE, barely any coefficients are significant anymore. 
+This may imply that for 4G, the state actually is important, indicating that the distribution policy differs from the earlier technologies.
+However, looking at @fig-antennas again, this may also be due to the heavy clustering in Dar es Salaam and on Zanzibar.
+
+Additionally, night time lights have barely any effect anymore, but the GHSL continues to impact both number and probability of antennas per grid cell: if the GHSL value increases by 1, the probability of any antenna increases by 20.5%, and the number of antennas increases by .7.
+
+However, the TRI continues to have a signifcant, close-to-zero impact.
+Lighntings also continue to have a highly significant, negative impact on the number and probability of antennas per grid cell. 
+
+
 ```{r}
 #| label: run-regressions-4g
 reg_bin_4g <- run_regressions("any_4g")
 reg_4g <- run_regressions("number_4g")
 ```
+
 ```{r}
 #| label: tbl-regressions-4g
 #| tbl-cap: Regression results for 4G antennas
@@ -802,6 +900,28 @@ list(
 ```
 
 # Discussion and conclusion
+
+In this report, I have considered variables that explain whether antennas are built in a certain area in Tanzania.
+For this, I distinguished between three antenna technologies: 2G, 3G, and 4G.
+
+I find that 4G differs from the other two technologies, in that higher night lights intensity barely increases the probability and number of antenna per grid cell, which it did for 2G and 3G antennas. 
+Also, the state FE becomes more relevant for 4G antennas. 
+This indicates that the selection process for 4G antennas differs from the earlier technologies.
+
+I also find that 2G and 3G antennas differ a bit, since GHSL impacts the number of antennas per grid cell differently. 
+While it is important for both technologies, the coefficient for GHSL doubles from 2G to 3G, implying that it becomes a more driving factor.
+
+Overall, TRI has a significant, but very low impact.
+Night lights have a significant, but it is also low, especially for 4G antennas.
+The mean number of lightnings has a quite consistently significant negative impact on both probability and number of antennas per grid cell. 
+However, when clustering standard errors by state and adding state FE, the significance disappears.
+
+It thus seems that we've found important drivers for building mobile antennas: 
+
+-   night lights
+-   number lightnings
+-   GHSL
+-   and, to some extent, TRI.
 
 {{< pagebreak >}}
 
