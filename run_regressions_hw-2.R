@@ -1,6 +1,7 @@
-run_regressions <- function(dep_var, 
+run_regressions <- function(dep_var,
                             indep_vars = explanatory_vals,
-                            dataset = data) {
+                            dataset = data,
+                            conley = FALSE) {
   # check there's a state variable
   assertthat::assert_that(all(c("state_name") %in% names(data)),
                           msg = "The data frame needs to include a state_name variable.")
@@ -13,8 +14,8 @@ run_regressions <- function(dep_var,
   
   formula <- reformulate(indep_vars, dep_var)
   
-  baseline <- 
-    dataset |> 
+  baseline <-
+    dataset |>
     feols(fml = formula,
           data = _)
   
@@ -23,23 +24,33 @@ run_regressions <- function(dep_var,
     feols(fml = formula,
           data = _,
           fixef = "state_name")
-
+  
   fe_hetero <-
     dataset |>
-    feols(fml = formula,
-          data = _,
-          fixef = "state_name",
-          vcov = "hetero")
+    feols(
+      fml = formula,
+      data = _,
+      fixef = "state_name",
+      vcov = "hetero"
+    )
   
-  conley <-
-    dataset |>
-    feols(fml = formula,
-          data = _,
-          vcov = "conley")
+  # only add Conley regression if needed (takes forever)
+  if (conley == FALSE) {
+    list <- list(baseline,
+                 fe_state,
+                 fe_hetero)
+  } else if (conley == TRUE) {
+    conley <-
+      dataset |>
+      feols(fml = formula,
+            data = _,
+            vcov = "conley")
+    
+    list <- list(baseline,
+                 fe_state,
+                 fe_hetero,
+                 conley)
+  }
   
-  list <- list(baseline,
-               fe_state,
-               fe_hetero,
-               conley)
   return(list)
 }

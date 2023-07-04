@@ -78,7 +78,7 @@ showtext_auto()
 
 
 here("run_regressions_hw-2.R") |> source()
-here("show_regressions.R") |> source()
+here("show_regressions_hw-2.R") |> source()
 
 ```
 
