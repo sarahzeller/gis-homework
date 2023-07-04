@@ -255,6 +255,7 @@ basemap +
 The presence of a mobile antenna is what we want to predict.
 I remove all observations after 2022, since the data for 2023 are not complete yet.
 I split the data into three data sets:
+
 -   2G (GSM technology)
 -   3G (UMTS technology)
 -   4G (LTE technology)
@@ -759,11 +760,21 @@ explanatory_vals <- c("DN_NTL_2021",
 
 ## 2G (GMS)
 
+In the first set of regressions, I consider 2G antennas, i.e. the earliest ones. 
+As seen in @fig-antennas, this type of antenna is the most frequent one. 
+With this type of antenna, we should be able to see how the government chooses spots for early and basic provision.
+@tbl-
+
 ```{r}
 #| label: run-regression-2g
 
 reg_bin_2g <- run_regressions("any_2g")
 reg_2g <- run_regressions("number_2g")
+```
+
+```{r}
+#| label: tbl-regression-2g
+#| tbl-cap: Regression results for 2G antennas
 
 list(
   "Dependent variable: any 2G antenna" = reg_bin_2g,
@@ -777,11 +788,15 @@ list(
 ## 3G (UMTS)
 
 ```{r}
-#| label: tbl-regressions-3g
-#| tbl-cap: Regression results for 3G antennas
+#| label: run-regressions-3g
 
 reg_bin_3g <- run_regressions("any_3g")
 reg_3g <- run_regressions("number_3g")
+
+```
+```{r}
+#| label: tbl-regressions-3g
+#| tbl-cap: Regression results for 3G antennas
 
 list(
   "Dependent variable: any 3G antenna" = reg_bin_3g,
@@ -793,11 +808,13 @@ list(
 
 ## 4G (LTE)
 ```{r}
-#| label: tbl-regressions-4g
-#| tbl-cap: Regression results for 4G antennas
-
+#| label: run-regressions-4g
 reg_bin_4g <- run_regressions("any_4g")
 reg_4g <- run_regressions("number_4g")
+```
+```{r}
+#| label: tbl-regressions-4g
+#| tbl-cap: Regression results for 4G antennas
 
 list(
   "Dependent variable: any 4G antenna" = reg_bin_4g,
