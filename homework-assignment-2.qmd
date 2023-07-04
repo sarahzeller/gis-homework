@@ -389,28 +389,6 @@ basemap +
   
 ```
 
-#### Land cover
-
-```{r}
-#| load-land-cover
-
-# crop raster to Tanzania
-if (! (here("output/landcover_tanzania.tif") |> exists())) {
-  here("output/tri/LandCover_OneKilometerData/LANDCOVER1k.tif") |>
-    raster::raster() |> 
-    raster::crop(tanzania_whole |> st_transform("ESRI:54010")) |> 
-    raster::writeRaster(here("output/landcover_tanzania.tif"), overwrite = TRUE)
-}
-
-# read in
-landcover <- here("output/landcover_tanzania.tif") |> 
-  terra::rast() |> 
-  terra::project("epsg:4326")
-
-```
-
-
-
 ## Global Human Settlement Layer (GHSL)
 
 The data for the Global Human Settlement Layer come from the European Commission.
