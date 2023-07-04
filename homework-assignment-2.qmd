@@ -627,7 +627,7 @@ saveRDS(centroids,
 #| label: gather-statistics
 
 data <- nightlights_sf |>
-  cbind(nightlights_state |> select(state_name)) |> 
+  cbind(nightlights_state |> dplyr::select(state_name)) |> 
   cbind(ntl_lightnings_zonal) |>
   cbind(ntl_tri_zonal) |>
   cbind(ntl_ghsl_zonal) |>
@@ -729,12 +729,87 @@ basemap +
 
 # Regressions
 
-```{r}
-#| label: run-regression
+In run seperate regressions for each technology.
+Within each technology, I use two different dependent variables: 
 
-regression_2g <- feols(number_2g ~ DN_NTL_2021 + lightnings_tanzania + tri_tanzania + ghsl, data = data)
-regression_3g <- feols(number_3g ~ DN_NTL_2021 + lightnings_tanzania + tri_tanzania + ghsl, data = data)
-regression_4g <- feols(number_4g ~ DN_NTL_2021 + lightnings_tanzania + tri_tanzania + ghsl, data = data)
+-   any antenna in grid cell
+-   number of antennas per grid cell
+
+The first specification is due to the wording in the homework assignment; the second is because I noticed some cells with much larger values than 1.
+
+For each of these dependent variables, I run the following regressions:
+
+1.    *baseline:* a simple ordinary least squares regression (OLS) 
+2.    *fixed effects (FE)*: a simple OLS with FE on the state level, and accordingly clustered standard errors
+3.    *HAC standard errors:* as 2., but with standard errors accounting for heteroscedasticity.
+4.    *Conley standard errors:* a simple OLS regression with Conley standard errors
+
+I decide against using an instrumental variables (IV) approach.
+This is because while lightning strikes are an instrument for mobile antennas, mobile antennas in this case are the dependent variable. 
+However, the IV approach is only used when there is an endogenous explanatory variable.
+Since this is not the case, and I do not know of any further endogeneity issues or how to solve them through IV, I do not employ an IV strategy.
+
+```{r}
+#| label: declare-explanatory-vals
+
+explanatory_vals <- c("DN_NTL_2021", 
+                      "lightnings_tanzania", 
+                      "tri_tanzania", 
+                      "ghsl")
+```
+
+
+## 2G (GMS)
+
+```{r}
+#| label: run-regression-umts
+
+reg_bin_2g <- run_regressions("any_2g")
+reg_2g <- run_regressions("number_2g")
+
+list(
+  "Dependent variable: any 2G antenna" = reg_bin_2g,
+  "Dependent variable: number of 2G antennas" = reg_2g
+) |>
+  show_regressions(regression_list = _)
 
 ```
 
+
+## 3G (UMTS)
+
+```{r}
+#| label: tbl-regressions-3g
+#| tbl-cap: Regression results for 3G antennas
+
+reg_bin_3g <- run_regressions("any_3g")
+reg_3g <- run_regressions("number_3g")
+
+list(
+  "Dependent variable: any 3G antenna" = reg_bin_3g,
+  "Dependent variable: number of 3G antennas" = reg_3g
+) |>
+  show_regressions(regression_list = _)
+```
+
+
+## 4G (LTE)
+```{r}
+#| label: tbl-regressions-4g
+#| tbl-cap: Regression results for 4G antennas
+
+reg_bin_4g <- run_regressions("any_4g")
+reg_4g <- run_regressions("number_4g")
+
+list(
+  "Dependent variable: any 4G antenna" = reg_bin_4g,
+  "Dependent variable: number of 4G antennas" = reg_4g
+) |>
+  show_regressions(regression_list = _)
+```
+
+# Discussion and conclusion
+
+{{< pagebreak >}}
+
+# References {.unnumbered}
