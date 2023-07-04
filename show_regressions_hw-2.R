@@ -11,5 +11,6 @@ show_regressions <- function(regression_list) {
                  "l", 
                  rep("d", length(regression_list[[1]]))
                ),
-               collapse = "")) 
+               collapse = "")) |> 
+    kableExtra::landscape()
 }

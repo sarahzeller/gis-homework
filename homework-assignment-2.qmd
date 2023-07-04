@@ -9,7 +9,6 @@ format:
   pdf:
     toc: true
     number-sections: true
-    mainfont: "Open Sans"
     include-in-header: 
       - text: |
           % für Alignment bei Kommastelle
@@ -240,6 +239,7 @@ Thus, we'd expect a positive correlation between this variable and the number or
 
 ```{r}
 #| label: fig-nightlights-zonal
+#| layout-ncol: 2
 #| fig-cap: Nightlights
 #| fig-subcap:
 #|   - per state
@@ -399,6 +399,7 @@ tri <- here("output/tri_tanzania.tif") |>
 
 ```{r}
 #| label: fig-zonal-tri
+#| layout-ncol: 2
 #| fig-cap: TRI
 #| fig-subcap:
 #|    - for Tanzanian states
@@ -469,6 +470,7 @@ ghsl <- here("output/ghsl.tif") |>
 
 ```{r}
 #| label: fig-zonal-ghsl
+#| layout-ncol: 2
 #| fig-cap: Zonal statistics for GHSL
 #| fig-subcap: 
 #|    - per state
@@ -676,7 +678,8 @@ data <- nightlights_sf |>
   ) |>
   # add antenna info
   mutate(number_antennas = labelled(ntl_antennas_vector,
-                                    label = "Number of antennas")) |>
+                                    label = "Number of antennas"),
+         log_number_antennas = log(ntl_antennas_vector + 1e-6)) |>
   mutate(
     number_2g = labelled(ntl_two_g, label = "Number of 2G antennas"),
     number_3g = labelled(ntl_three_g, label = "Number of 3G antennas"),
@@ -694,7 +697,7 @@ data <- nightlights_sf |>
 
 selected_cols <- data |> 
   as.data.frame() |> 
-  dplyr::select(-geometry, -lon, -lat, -state_name) |> 
+  dplyr::select(-geometry, -lon, -lat, -state, -log_number_antennas) |> 
   names()
 
 # prepare histogram sparklines
@@ -730,8 +733,9 @@ As @fig-raster-antennas shows, many grid cells have no antenna; a few have many,
 However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained.
 
 ```{r}
-#| eval: false 
+#| eval: true 
 #| label: fig-raster-antennas
+#| layout-ncol: 2
 #| fig-cap: "Antennas per grid cell"
 #| fig-subcap: 
 #|   - "Histogram"
