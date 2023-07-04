@@ -195,9 +195,9 @@ I access nighttime lights from the file uploaded in OPAL.
 #| label: load-nightlights
 
 if (! "nightlights_sf.rds" %in% (here("output") |> list.files())) {
-  nightlights <- here("input/DN_NTL_2021.tif") |> 
-    raster::raster() |> 
-    crop(tanzania_whole) |> 
+  nightlights <- here("input/DN_NTL_2021.tif") |>
+    raster::raster() |>
+    crop(tanzania_whole) |>
     mask(tanzania_whole)
   
   nightlights_sf <- nightlights |>
@@ -246,11 +246,7 @@ basemap +
                   fill = DN_NTL_2021))
 
 ```
-```{r}
-#| label nightlight-intersection
 
-nightlight_intersection <- terra::intersect(nightlights, open_cell)
-```
 
 
 
@@ -422,7 +418,7 @@ I download them on a 250m grid with data from 2014.
 ```{r}
 #| label: download-ghsl
 
-if (! (here("output/ghsl.tif") |> exists())) {
+if (! ("ghsl.tif" %in% (here("output") |> list.files()))) {
   # download
   download.file("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_LDSMT_GLOBE_R2015B/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250/V1-0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.zip",
               destfile = here("output/ghsl.zip"))
@@ -435,7 +431,7 @@ if (! (here("output/ghsl.tif") |> exists())) {
     raster::crop(tanzania_whole |> st_transform("ESRI:54009")) |> 
     raster::mask(tanzania_whole |> st_transform("ESRI:54009")) |> 
     raster::writeRaster(here("output/ghsl.tif"), overwrite = TRUE)
-}
+} 
 ```
 
 ```{r}
@@ -698,12 +694,11 @@ It's worth taking a moment to analyse the antennas per grid cell.
 As @fig-raster-antennas shows, many grid cells have no antenna; a few have many, with a maximum of `r data$number_antennas |> max()`.
 However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained. 
 ```{r}
-#| fig-raster-antennas
-#| fig-cap: Antennas per grid cell
-#| fig-scap: 
-#|    - Histogram
-#|    - Map
-
+#| label: fig-raster-antennas
+#| fig-cap: "Antennas per grid cell"
+#| fig-subcap: 
+#|   - "Histogram"
+#|   - "Map"
 
 number_antennas_raster <- data |> 
   dplyr::select(log_number_antennas) |> 
@@ -742,7 +737,10 @@ For each of these dependent variables, I run the following regressions:
 1.    *baseline:* a simple ordinary least squares regression (OLS) 
 2.    *fixed effects (FE)*: a simple OLS with FE on the state level, and accordingly clustered standard errors
 3.    *HAC standard errors:* as 2., but with standard errors accounting for heteroscedasticity.
-4.    *Conley standard errors:* a simple OLS regression with Conley standard errors
+
+I also considered using *Conley standard errors*. 
+However, the regressions took too long to run. 
+If of interest, it can however be run in the cells `run-regression-2g` to `run-regression-4g` by adding the following argument to the function `run_regressions`: `conley = TRUE`. 
 
 I decide against using an instrumental variables (IV) approach.
 This is because while lightning strikes are an instrument for mobile antennas, mobile antennas in this case are the dependent variable. 
@@ -762,7 +760,7 @@ explanatory_vals <- c("DN_NTL_2021",
 ## 2G (GMS)
 
 ```{r}
-#| label: run-regression-umts
+#| label: run-regression-2g
 
 reg_bin_2g <- run_regressions("any_2g")
 reg_2g <- run_regressions("number_2g")
