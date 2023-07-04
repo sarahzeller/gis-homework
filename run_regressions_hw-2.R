@@ -3,8 +3,8 @@ run_regressions <- function(dep_var,
                             dataset = data,
                             conley = FALSE) {
   # check there's a state variable
-  assertthat::assert_that(all(c("state_name") %in% names(data)),
-                          msg = "The data frame needs to include a state_name variable.")
+  assertthat::assert_that(all(c("state") %in% names(data)),
+                          msg = "The data frame needs to include a state variable.")
   # check that there's a geometry column
   assertthat::assert_that(all(c("lon", "lat") %in% names(dataset)),
                           msg = "The data frame needs to include geometry variables x and y.")
@@ -23,14 +23,14 @@ run_regressions <- function(dep_var,
     dataset |>
     feols(fml = formula,
           data = _,
-          fixef = "state_name")
+          fixef = "state")
   
   fe_hetero <-
     dataset |>
     feols(
       fml = formula,
       data = _,
-      fixef = "state_name",
+      fixef = "state",
       vcov = "hetero"
     )
   

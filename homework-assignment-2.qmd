@@ -529,12 +529,16 @@ if (!"nightlights_sf_w_state.rds" %in% (here("output") |> list.files())) {
   overlap_first <- sapply(nightlights_state_intersection, first, default = NA)
   
   # determine the final state
-  nightlights_state <- data.frame(state = overlap_first,
-                           number_states = overlap_state_number) |> 
-    mutate(state_name = case_when(number_states == 0 ~ "none",
-                                  number_states == 1 ~ tanzania$name[state],
-                                  number_states > 1 ~ "multiple states")) |> 
-    mutate(state_name = labelled(state_name, label = "State name"))
+  nightlights_state <- data.frame(state_number_first_overlap = overlap_first,
+                                  number_states = overlap_state_number) |>
+    mutate(
+      state = case_when(
+        number_states == 0 ~ "none",
+        number_states == 1 ~ tanzania$name[state_number_first_overlap],
+        number_states > 1 ~ "multiple states"
+      )
+    ) |>
+    mutate(state = labelled(state, label = "State name"))
   
   
   saveRDS(nightlights_state,
@@ -657,7 +661,7 @@ saveRDS(centroids,
 #| label: gather-statistics
 
 data <- nightlights_sf |>
-  cbind(nightlights_state |> dplyr::select(state_name)) |> 
+  cbind(nightlights_state |> dplyr::select(state)) |> 
   cbind(ntl_lightnings_zonal) |>
   cbind(ntl_tri_zonal) |>
   cbind(ntl_ghsl_zonal) |>
@@ -726,6 +730,7 @@ As @fig-raster-antennas shows, many grid cells have no antenna; a few have many,
 However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained.
 
 ```{r}
+#| eval: false 
 #| label: fig-raster-antennas
 #| fig-cap: "Antennas per grid cell"
 #| fig-subcap: 
