@@ -52,3 +52,5 @@ rsconnect/
 input/
 output/
 *.pdf
+*.html
+*_files/
