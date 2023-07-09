@@ -68,7 +68,7 @@ library(kableExtra)
 library(labelled)
 library(fixest)
 library(stars)
-library(raster)
+library(terra)
 library(dplyr)
 
 library(showtext)
@@ -197,42 +197,20 @@ The grid cells are approximately 1 $km^2$.
 ```{r}
 #| label: load-nightlights
 
-if (! "nightlights_sf.rds" %in% (here("output") |> list.files())) {
-  nightlights <- here("input/DN_NTL_2021.tif") |>
-    raster::raster() |>
-    crop(tanzania_whole) |>
-    mask(tanzania_whole)
-  
-  nightlights_sf <- nightlights |>
-    # as('SpatialPolygonsDataFrame') |> 
-    rasterToPolygons(dissolve = FALSE, na.rm = TRUE) |> 
-    st_as_sf()
-  
-  saveRDS(nightlights_sf,
-          here("output/nightlights_sf.rds"))
-  st_write(nightlights_sf,
-           here("output/nightlights_sf.shp")) |> try()
-} else {
-  nightlights_sf <- here("output/nightlights_sf.rds") |> readRDS()
-}
-
 nightlights_terra <- here("input/DN_NTL_2021.tif") |> 
   terra::rast() |> 
   # crop to extent
-  crop(tanzania_whole) |> 
+  terra::crop(tanzania_vect) |>
   # clip exact borders
-  mask(tanzania_whole)
-
-nightlights_vect <- here("output/nightlights_sf.shp") |> terra::vect()
-
+  terra::mask(tanzania_vect)
 ```
 
 I use this grid cell as the baseline and aggregate all other variables on this level.
 For this, I transform the raster data to a `sf` object, and then calculate zonal statistics for each of the grid cells.
-This leads to a huge data set, since I have `r nrow(nightlights_sf) |> format(big.mark = ",")` grid cells. However, I chose to go with such a detailed data set so that calculating the probability of any antenna within this grid cell makes some sense; if the grid cells are too large, we'd have to go for the number of antennas.
+This leads to a huge data set, since I have `r length(terra::cells(nightlights_terra)) |> format(big.mark = ",")` grid cells. However, I chose to go with such a detailed data set so that calculating the probability of any antenna within this grid cell makes some sense; if the grid cells are too large, we'd have to go for the number of antennas.
 
 In @fig-nightlights-zonal, I plot the data.
-I first show them aggregated on the state level: here, we can see that there are only to states with high light intensity, and a couple of rather dark ones, while the rest is in between.
+I first show them aggregated on the state level: here, we can see that there are only two states with high light intensity, and a couple of rather dark ones, while the rest is in between.
 When disaggregating them to the grid level, we can see that the picture is actually more nuanced: there are some large cities which are really bright, a lot of areas with at least some lights, and other areas which are pitch-black.
 We would expect the antennas to be built where more people are, since more people can then use the new infrastructure.
 Thus, we'd expect a positive correlation between this variable and the number or probability of an antenna within a grid cell.
@@ -283,7 +261,7 @@ For 4G technology, the antenna clusters seem to match the large cities which we 
 
 ```{r}
 #| label: load-cellid
-here("input/opencellid_tanzania.RData") |> load()
+here("input/opencellid_tanzania.RData") |> base::load()
 
 open_cell <- opencellid_tanzania |> 
     # convert to sf 
@@ -342,7 +320,7 @@ here("input/lightnings_2014.rds") |> readRDS() |>
 lightning <- here("output/lightnings_tanzania.tif") |> 
   terra::rast() |> 
   # clip exact borders
-  mask(tanzania_whole)
+  terra::mask(tanzania_vect)
 ```
 
 ```{r}
@@ -378,23 +356,17 @@ When considering the cell level, we can see that there are just a few cells with
 #| label: load-tri
 
 # extract zip
-if(!("tri_tanzania.tif" %in% (here("output") |> list.files()))) {
-  archive_extract(here("input/dataverse_files.zip"),
-                  here("output/tri"))
+archive_extract(
+  here("input/dataverse_files.zip"),
+  here("output/tri")
+)
   
-  # crop raster to Tanzania
-  here("output/tri/Ruggedness_OneKilometerData/ruggedness1K.tif") |>
-    raster::raster() |>
-    raster::crop(tanzania_whole |> st_transform("ESRI:54010")) |>
-    mask(tanzania_whole |> st_transform("ESRI:54010")) |>
-    raster::writeRaster(here("output/tri_tanzania.tif"), overwrite = TRUE)
-}
-
-# read in
-tri <- here("output/tri_tanzania.tif") |> 
-  terra::rast() |> 
-  terra::project("epsg:4326")
-
+# crop raster to Tanzania
+tri <- here("output/tri/Ruggedness_OneKilometerData/ruggedness1K.tif") |>
+  terra::rast() |>
+  terra::project(nightlights_terra) |>
+  terra::crop(tanzania_vect) |>
+  terra::mask(tanzania_vect)
 ```
 
 ```{r}
@@ -414,7 +386,7 @@ tri_zonal <- zonal(tri,
 
 basemap + 
   geom_sf(data = tri_zonal,
-          aes(fill = tri_tanzania)) +
+          aes(fill = ruggedness1K)) +
   labs(fill = "Terrain Ruggedness \nIndex",
        caption = "Data: Harvard Dataverse")
 
@@ -422,7 +394,7 @@ basemap +
   geom_raster(data = tri |> as.data.frame(xy = TRUE),
               aes(x = x,
                   y = y,
-                  fill = tri_tanzania)) +
+                  fill = ruggedness1K)) +
   labs(fill = "Terrain Ruggedness \nIndex",
        caption = "Data: Harvard Dataverse")
   
@@ -444,6 +416,8 @@ Also, towards the North-East, there is a cluster with high settlement which did 
 ```{r}
 #| label: download-ghsl
 
+options(timeout=60*10)
+
 if (! ("ghsl.tif" %in% (here("output") |> list.files()))) {
   # download
   download.file("http://cidportal.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_LDSMT_GLOBE_R2015B/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250/V1-0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.zip",
@@ -451,21 +425,20 @@ if (! ("ghsl.tif" %in% (here("output") |> list.files()))) {
   # extract
   archive_extract(here("output/ghsl.zip"),
                   here("output/ghsl"))
-  # crop and save
-  here("output/ghsl/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.tif") |> 
-    raster::raster() |> 
-    raster::crop(tanzania_whole |> st_transform("ESRI:54009")) |> 
-    raster::mask(tanzania_whole |> st_transform("ESRI:54009")) |> 
-    raster::writeRaster(here("output/ghsl.tif"), overwrite = TRUE)
-} 
+}
 ```
 
 ```{r}
 #| label: load-ghsl
 
-ghsl <- here("output/ghsl.tif") |> 
-  terra::rast() |> 
-  terra::project("epsg:4326")
+ ghsl <- here("output/ghsl/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0/GHS_BUILT_LDS2014_GLOBE_R2016A_54009_250_v1_0.tif") |>
+    terra::rast() |>
+    terra::project(nightlights_terra) |>
+    terra::crop(tanzania_vect) |>
+    terra::mask(tanzania_vect) |>
+    terra::resample(nightlights_terra, method = "bilinear")
+
+names(ghsl) <- "ghsl"
 ```
 
 ```{r}
@@ -519,176 +492,92 @@ We can also see thatt the distributions of all variables are quite left-skewed: 
 This is especially true for the number of antennas.
 
 ```{r}
+#| label: empty-raster
+empty <- terra::rast(
+  resolution = terra::res(nightlights_terra),
+  crs = terra::crs(nightlights_terra),
+  extent = terra::ext(nightlights_terra)
+)
+```
+```{r}
 #| label: add-state-to-nightlights
 
-if (!"nightlights_sf_w_state.rds" %in% (here("output") |> list.files())) {
-  # intersect first
-  nightlights_state_intersection <- nightlights_sf |>  
-    st_intersects(tanzania |> dplyr::select(name))
-  
-  # figure out number of overlapping states, and pull out first
-  overlap_state_number <- nightlights_state_intersection %>% lengths()
-  overlap_first <- sapply(nightlights_state_intersection, first, default = NA)
-  
-  # determine the final state
-  nightlights_state <- data.frame(state_number_first_overlap = overlap_first,
-                                  number_states = overlap_state_number) |>
-    mutate(
-      state = case_when(
-        number_states == 0 ~ "none",
-        number_states == 1 ~ tanzania$name[state_number_first_overlap],
-        number_states > 1 ~ "multiple states"
-      )
-    ) |>
-    mutate(state = labelled(state, label = "State name"))
-  
-  
-  saveRDS(nightlights_state,
-          here("output/nightlights_states.rds"))
-} else {
-  nightlights_state <-
-    here("output/nightlights_states.rds") |> readRDS()
-}
-
+states <- terra::rasterize(
+  tanzania,
+  empty,
+  field = "name"
+)
 ```
 
 ```{r}
 #| label: count-antennas-per-grid-cell
 
-if (!("ntl_antennas_vector.rds" %in% (here("output") |> list.files()))) {
-  ntl_antennas <- st_intersects(nightlights_sf, open_cell)
-  
-  ntl_antennas_vector <- ntl_antennas %>% lengths
-  
-  saveRDS(ntl_antennas,
-          here("output/ntl_antennas_sgbp.rds"))
-  saveRDS(ntl_antennas_vector,
-          here("output/ntl_antennas_vector.rds"))
-} else {
-  ntl_antennas_vector <-
-    here("output/ntl_antennas_vector.rds") |> readRDS()
-}
+open_cell_vect <- terra::vect(open_cell)
 
-# per technology
-if (! all(c("ntl_two_g.rds", "ntl_three_g.rds", "ntl_four_g.rds") %in%
-          (here("output") |> list.files()))) {
-  
-ntl_two_g <- st_intersects(nightlights_sf, two_g) %>% lengths
-ntl_three_g <- st_intersects(nightlights_sf, three_g) %>% lengths
-ntl_four_g <- st_intersects(nightlights_sf, four_g) %>% lengths
-
-saveRDS(ntl_two_g, here("output/ntl_two_g.rds"))
-saveRDS(ntl_three_g, here("output/ntl_three_g.rds"))
-saveRDS(ntl_four_g, here("output/ntl_four_g.rds"))
-} else {
-  ntl_two_g <- here("output/ntl_two_g.rds") |> readRDS()
-  ntl_three_g <- here("output/ntl_three_g.rds") |> readRDS()
-  ntl_four_g <- here("output/ntl_four_g.rds") |> readRDS()
-}
-
+n_antennas_per_technology <- open_cell_vect |>
+  base::split(open_cell_vect$radio) |>
+  c(all = open_cell_vect) |>
+  purrr::map(
+    .x =_,
+    .f = ~ terra::rasterize(.x, empty, fun = sum, background = 0)
+  ) |> terra::rast()
 ```
 
 ```{r}
-#| label: calculate-ntl-zonal-statistics
+#| label: resample-lightnings
 
-if (! "ntl_lightnings_zonal.rds" %in% (here("output") |> list.files())) {
-  ntl_lightnings_zonal <- zonal(lightning,
-                                nightlights_vect,
-                                fun = "mean",
-                                na.rm = TRUE)
-  saveRDS(ntl_lightnings_zonal,
-          here("output/ntl_lightnings_zonal.rds"))
-} else {
-  ntl_lightnings_zonal <- here("output/ntl_lightnings_zonal.rds") |> readRDS()
-}
-
+lightning_r <- terra::resample(lightning, nightlights_terra, method="bilinear")
+names(lightning_r) <- "lightnings"
 ```
 
 ```{r}
-#| label: calculate-tri-zonal-statistics
+#| label: resample-tri
 
-if (! "ntl_tri_zonal.rds" %in% (here("output") |> list.files())) {
-  ntl_tri_zonal <- zonal(tri,
-                                nightlights_vect,
-                                fun = "mean", na.rm = TRUE)
-  
-  saveRDS(ntl_tri_zonal,
-          here("output/ntl_tri_zonal.rds"))
-  
-} else {
-  ntl_tri_zonal <-
-    here("output/ntl_tri_zonal.rds") |> readRDS()
-}
-```
-
-```{r}
-#| label: calculate-ghsl-zonal-statistics
-
-if (! "ntl_ghsl_zonal.rds" %in% (here("output") |> list.files())) {
-  ntl_ghsl_zonal <- zonal(ghsl,
-                                 nightlights_vect,
-                                 fun = "mean", na.rm = TRUE)
-  
-  saveRDS(ntl_ghsl_zonal,
-          here("output/ntl_ghsl_zonal.rds"))
-} else {
-  ntl_ghsl_zonal <- here("output/ntl_ghsl_zonal.rds") |> readRDS()
-}
-```
-
-```{r}
-#| label: add-lat-lon
-
-if (! "centroids.rds" %in% (here("output") |> list.files())) {
-  
-# add an x and y coordinate variable for Conley SE
-centroids <- nightlights_sf |> 
-  dplyr::select(geometry) |> 
-  st_as_sf() |> 
-  st_centroid() |> 
-  st_coordinates() |> 
-  as.data.frame() |> 
-  rename(lat = X,
-         lon = Y)
-
-saveRDS(centroids,
-        here("output/centroids.rds"))
-} else {
-  centroids <- here("output/centroids.rds") |> readRDS()
-}
-
+tri_r <- terra::resample(tri, nightlights_terra, method = "bilinear")
 ```
 
 ```{r}
 #| label: gather-statistics
 
-data <- nightlights_sf |>
-  cbind(nightlights_state |> dplyr::select(state)) |> 
-  cbind(ntl_lightnings_zonal) |>
-  cbind(ntl_tri_zonal) |>
-  cbind(ntl_ghsl_zonal) |>
-  cbind(centroids) |> 
+data <- nightlights_terra |>
+  c(states, ghsl, tri_r, lightning_r, n_antennas_per_technology) |>
+  as.data.frame(xy = TRUE) |>
+  rename(
+    lon = x,
+    lat = y,
+    state = name,
+    tri = ruggedness1K,
+    nightlights = DN_NTL_2021,
+    n_2g = GSM,
+    n_3g = UMTS,
+    n_4g = LTE,
+    n_antennas = all
+  ) |>
   # add pretty labels
   mutate(
-    DN_NTL_2021 = labelled(DN_NTL_2021, label = "Mean night time lights"),
-    lightnings_tanzania = labelled(lightnings_tanzania,   
-                                   label = "Mean number of lightnings"),
-    tri_tanzania = labelled(tri_tanzania, label = "Mean TRI"),
+    nightlights = labelled(nightlights, label = "Mean night time lights"),
+    lightnings = labelled(
+      lightnings,
+      label = "Mean number of lightnings"),
+    tri = labelled(tri, label = "Mean TRI"),
     ghsl = labelled(ghsl, label = "Mean GHSL")
   ) |>
   # add antenna info
-  mutate(number_antennas = labelled(ntl_antennas_vector,
-                                    label = "Number of antennas"),
-         log_number_antennas = log(ntl_antennas_vector + 1e-6)) |>
   mutate(
-    number_2g = labelled(ntl_two_g, label = "Number of 2G antennas"),
-    number_3g = labelled(ntl_three_g, label = "Number of 3G antennas"),
-    number_4g = labelled(ntl_four_g, label = "Number of 4G antennas"),
-    any_2g = labelled(as.integer(ntl_two_g > 0), label = "Any 2G antenna"),
-    any_3g = labelled(as.integer(ntl_three_g > 0), label = "Any 3G antenna"),
-    any_4g = labelled(as.integer(ntl_four_g > 0), label = "Any 4G antenna"),
+    n_antennas = labelled(
+      n_antennas,
+      label = "Number of antennas"
+    ),
+    log_n_antennas = log(n_antennas + 1e-6)
+  ) |>
+  mutate(
+    n_2g = labelled(n_2g, label = "Number of 2G antennas"),
+    n_3g = labelled(n_3g, label = "Number of 3G antennas"),
+    n_4g = labelled(n_4g, label = "Number of 4G antennas"),
+    any_2g = labelled(as.integer(n_2g > 0), label = "Any 2G antenna"),
+    any_3g = labelled(as.integer(n_3g > 0), label = "Any 3G antenna"),
+    any_4g = labelled(as.integer(n_4g > 0), label = "Any 4G antenna"),
   ) 
-
 ```
 
 ```{r}
@@ -696,8 +585,7 @@ data <- nightlights_sf |>
 #| tbl-cap: Summary statistics
 
 selected_cols <- data |> 
-  as.data.frame() |> 
-  dplyr::select(-geometry, -lon, -lat, -state, -log_number_antennas) |> 
+  dplyr::select(-lon, -lat, -state, -log_n_antennas) |>
   names()
 
 # prepare histogram sparklines
@@ -729,7 +617,7 @@ datasummary(formula = as.formula(formula_summary),
 ```
 
 It's worth taking a moment to analyse the antennas per grid cell.
-As @fig-raster-antennas shows, many grid cells have no antenna; a few have many, with a maximum of `r data$number_antennas |> max()`.
+As @fig-raster-antennas shows, many grid cells have no antenna; a few have many, with a maximum of `r data$n_antennas |> max()`.
 However, the grid cells with the many antennas align with the pattern we have seen in @fig-antennas, so that can easily be explained.
 
 ```{r}
@@ -741,24 +629,22 @@ However, the grid cells with the many antennas align with the pattern we have se
 #|   - "Histogram"
 #|   - "Map"
 
-number_antennas_raster <- data |> 
-  dplyr::select(log_number_antennas) |> 
-  st_rasterize() |> 
-  as.data.frame(xy = TRUE)
-
 ggplot() +
   geom_histogram(data = data,
-            aes(x = number_antennas),
+            aes(x = n_antennas),
             bins = 50) +
   scale_y_continuous(trans = scales::pseudo_log_trans()) +
   theme_minimal() +
   labs(x = "Log number of antennas per grid cell")
 
 basemap +
-  geom_raster(data = number_antennas_raster,
+  geom_raster(
+    data = n_antennas_per_technology$all |>
+    terra::mask(tanzania_vect) |>
+    as.data.frame(xy = TRUE),
               aes(x = x,
                   y = y,
-                  fill = log_number_antennas)) +
+                  fill = log(all + 1e-6))) +
   scale_fill_continuous(na.value = NA) +
   labs(fill = "Log number of antennas")
 ```
@@ -800,9 +686,9 @@ Since this is not the case, and I do not know of any further endogeneity issues 
 ```{r}
 #| label: declare-explanatory-vals
 
-explanatory_vals <- c("DN_NTL_2021", 
-                      "lightnings_tanzania", 
-                      "tri_tanzania", 
+explanatory_vals <- c("nightlights",
+                      "lightnings",
+                      "tri",
                       "ghsl")
 ```
 
@@ -832,7 +718,7 @@ In almost all cases, the coefficients quintuple.
 #| label: run-regression-2g
 
 reg_bin_2g <- run_regressions("any_2g")
-reg_2g <- run_regressions("number_2g")
+reg_2g <- run_regressions("n_2g")
 ```
 
 ```{r}
@@ -860,7 +746,7 @@ The barely noticeable impact of TRI continues.
 #| label: run-regressions-3g
 
 reg_bin_3g <- run_regressions("any_3g")
-reg_3g <- run_regressions("number_3g")
+reg_3g <- run_regressions("n_3g")
 
 ```
 
@@ -894,7 +780,7 @@ Lighntings also continue to have a highly significant, negative impact on the nu
 ```{r}
 #| label: run-regressions-4g
 reg_bin_4g <- run_regressions("any_4g")
-reg_4g <- run_regressions("number_4g")
+reg_4g <- run_regressions("n_4g")
 ```
 
 ```{r}
