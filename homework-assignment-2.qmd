@@ -136,7 +136,7 @@ ggplot() +
   scale_fill_manual(values = c("grey90",
                                "#1EB53A")) +
   guides(fill = FALSE) +
-  coord_sf(crs = "+proj=ortho +lat_0=5 +lon_0=-10") +
+  coord_sf(crs = "+proj=ortho +lat_0=5 +lon_0=+40") +
   labs(caption = "Data: Natural Earth") +
   theme_void() +
   theme(text = element_text(family = "Open Sans"))
